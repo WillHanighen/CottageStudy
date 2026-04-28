@@ -162,43 +162,61 @@
 			</div>
 		{/if}
 
-		<!-- Owner controls -->
-		{#if data.isOwner}
+		<!-- Set actions -->
+		{#if set.cards.length > 0 || data.isOwner}
 			<div class="mb-10 flex flex-wrap items-center gap-3">
-				<a
-					href="/sets/{set.id}/edit"
-					class="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800"
-				>
-					<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-						<path d="M11 4H4v16h16v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" stroke-linecap="round" stroke-linejoin="round" />
-					</svg>
-					Edit set
-				</a>
-				{#if !confirmingDelete}
-					<button
-						type="button"
-						onclick={() => (confirmingDelete = true)}
-						class="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-400 transition hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300"
+				{#if data.isOwner}
+					<a
+						href="/sets/{set.id}/edit"
+						class="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:bg-zinc-800"
 					>
-						Delete set
-					</button>
-				{:else}
-					<form method="POST" action="?/delete" use:enhance class="flex items-center gap-2">
-						<span class="text-sm text-red-300">Sure?</span>
-						<button
-							type="submit"
-							class="rounded-lg bg-red-500 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-red-600"
-						>
-							Yes, delete
-						</button>
+						<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+							<path d="M11 4H4v16h16v-7M18.5 2.5a2.121 2.121 0 113 3L12 15l-4 1 1-4 9.5-9.5z" stroke-linecap="round" stroke-linejoin="round" />
+						</svg>
+						Edit set
+					</a>
+				{/if}
+				{#if set.cards.length > 0}
+					<a
+						href="/sets/{set.id}/export"
+						download
+						class="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-orange-500/40 hover:bg-zinc-800 hover:text-orange-300"
+					>
+						<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+							<path d="M12 4v12" stroke-linecap="round" />
+							<path d="M7 11l5 5 5-5" stroke-linecap="round" stroke-linejoin="round" />
+							<path d="M5 20h14" stroke-linecap="round" />
+						</svg>
+						Export JSON
+					</a>
+				{/if}
+				{#if data.isOwner}
+					{#if !confirmingDelete}
 						<button
 							type="button"
-							onclick={() => (confirmingDelete = false)}
-							class="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800"
+							onclick={() => (confirmingDelete = true)}
+							class="rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-400 transition hover:border-red-500/40 hover:bg-red-500/10 hover:text-red-300"
 						>
-							Cancel
+							Delete set
 						</button>
-					</form>
+					{:else}
+						<form method="POST" action="?/delete" use:enhance class="flex items-center gap-2">
+							<span class="text-sm text-red-300">Sure?</span>
+							<button
+								type="submit"
+								class="rounded-lg bg-red-500 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-red-600"
+							>
+								Yes, delete
+							</button>
+							<button
+								type="button"
+								onclick={() => (confirmingDelete = false)}
+								class="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800"
+							>
+								Cancel
+							</button>
+						</form>
+					{/if}
 				{/if}
 			</div>
 		{/if}

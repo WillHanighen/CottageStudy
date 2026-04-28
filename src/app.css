@@ -12,6 +12,18 @@
 html {
 	color-scheme: dark;
 	background-color: #09090b;
+	scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	html {
+		scroll-behavior: auto;
+	}
+}
+
+/* Keep in-page anchor targets clear of the sticky nav (h-16 = 4rem). */
+:where([id]) {
+	scroll-margin-top: 5rem;
 }
 
 body {

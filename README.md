@@ -44,7 +44,7 @@ bun run dev                # http://localhost:5173
 | [Architecture](./docs/architecture.md)           | System overview, data model, request lifecycle, auth + Turnstile flow, file map                |
 | [Study modes](./docs/study-modes.md)             | Behavior, controls, and internals for Flashcards / Learn / Quiz / Match                        |
 | [Development](./docs/development.md)             | Local setup, scripts, env vars, common tasks, debugging the auth dev loop                      |
-| [Deployment](./docs/deployment.md)               | Docker image, plain Bun runtime, SQLite persistence, public env baking, ops checklist          |
+| [Deployment](./docs/deployment.md)               | Bun runtime, SQLite persistence, public env baking, ops checklist                              |
 
 ## License
 

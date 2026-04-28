@@ -10,7 +10,7 @@
 
 <section class="relative py-16 sm:py-24">
 	<div class="mx-auto max-w-6xl px-6">
-		<div class="mb-12 max-w-2xl rise-in">
+		<div class="mb-10 max-w-2xl rise-in">
 			<p class="mb-3 font-mono text-xs tracking-widest text-orange-500 uppercase">/ Explore</p>
 			<h1 class="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
 				Public sets from the community.
@@ -20,11 +20,75 @@
 			</p>
 		</div>
 
+		<form
+			method="GET"
+			action="/explore"
+			class="mb-10 flex flex-col gap-3 sm:flex-row sm:items-center"
+			role="search"
+		>
+			<label for="explore-search" class="sr-only">Search public sets</label>
+			<div class="relative flex-1">
+				<svg
+					aria-hidden="true"
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="1.8"
+					class="pointer-events-none absolute top-1/2 left-4 h-4 w-4 -translate-y-1/2 text-zinc-500"
+				>
+					<circle cx="11" cy="11" r="7" />
+					<path d="M20 20l-3.5-3.5" stroke-linecap="round" />
+				</svg>
+				<input
+					id="explore-search"
+					type="search"
+					name="q"
+					value={data.q}
+					placeholder="Search by title or description&hellip;"
+					autocomplete="off"
+					class="block w-full rounded-xl border border-zinc-800 bg-zinc-950/60 py-3 pr-4 pl-11 text-sm text-white placeholder:text-zinc-600 transition-colors focus:border-orange-500 focus:outline-none"
+				/>
+			</div>
+			<div class="flex items-center gap-2">
+				<button
+					type="submit"
+					class="rounded-xl bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-zinc-200"
+				>
+					Search
+				</button>
+				{#if data.q}
+					<a
+						href="/explore"
+						class="rounded-xl border border-zinc-800 bg-zinc-900/50 px-4 py-3 text-sm font-medium text-zinc-300 transition hover:border-zinc-700 hover:bg-zinc-900"
+					>
+						Reset
+					</a>
+				{/if}
+			</div>
+		</form>
+
+		{#if data.q}
+			<p class="mb-6 font-mono text-xs tracking-widest text-zinc-500 uppercase">
+				{data.sets.length}
+				{data.sets.length === 1 ? 'result' : 'results'} for
+				<span class="text-orange-400">&ldquo;{data.q}&rdquo;</span>
+			</p>
+		{/if}
+
 		{#if data.sets.length === 0}
 			<div
 				class="rounded-3xl border border-dashed border-zinc-800 bg-zinc-900/20 p-16 text-center"
 			>
-				<p class="text-zinc-500">No public sets yet. Be the first &mdash; mark a set as public when you create it.</p>
+				{#if data.q}
+					<p class="text-zinc-500">
+						No public sets match &ldquo;{data.q}&rdquo;. Try a different word, or
+						<a href="/explore" class="text-orange-400 hover:underline">clear the search</a>.
+					</p>
+				{:else}
+					<p class="text-zinc-500">
+						No public sets yet. Be the first &mdash; mark a set as public when you create it.
+					</p>
+				{/if}
 			</div>
 		{:else}
 			<div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">

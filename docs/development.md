@@ -42,7 +42,7 @@ Source: [`.env.example`](../.env.example). Loaded by SvelteKit via
 | `TURNSTILE_SECRET_KEY`         | for sign-in       | `lib/server/turnstile.ts`                                              | Server-only. Missing → fail-open in dev, error in prod.                  |
 | `DB_PATH`                      | optional          | `lib/server/db.ts`                                                     | Defaults to `./data/study.db`. Created with `mkdir -p` on import.         |
 | `NODE_ENV`                     | optional          | `lib/server/turnstile.ts`, `routes/reset/+server.ts`                   | `production` flips Turnstile to fail-closed and 404s `/reset`.            |
-| `PORT`                         | runtime only      | `adapter-node` reads it at start                                       | Defaults to 3000 in the Docker image.                                     |
+| `PORT`                         | runtime only      | `adapter-node` reads it at start                                       | Defaults to 3000.                                                         |
 | `ORIGIN`                       | prod runtime only | `adapter-node` enforces same-origin POSTs against this                | Set to your public URL when behind a proxy.                               |
 
 Anything starting with `PUBLIC_` is exposed to the client and is baked into
@@ -75,7 +75,7 @@ In [dash.cloudflare.com](https://dash.cloudflare.com) → Turnstile:
 bun run dev          # vite dev server on :5173
 bun run build        # production bundle into ./build via adapter-node
 bun run preview      # serve the production build locally
-bun run start        # bun ./build/index.js (matches the Docker CMD)
+bun run start        # bun ./build/index.js (production server)
 bun run check        # svelte-kit sync + svelte-check (typecheck)
 bun run check:watch  # the above in watch mode
 ```

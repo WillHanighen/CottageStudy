@@ -2,8 +2,7 @@
 
 CottageStudy is a SvelteKit app with `@sveltejs/adapter-node`. The build
 output is a self-contained Node-compatible bundle in `./build/` that Bun runs
-directly. There are two well-trodden paths: the [Docker image](#docker) (the
-default) and [plain Bun](#plain-bun) on whichever host you like.
+directly.
 
 ## Build artifact
 
@@ -22,64 +21,19 @@ build/
 It listens on `process.env.PORT` (default 3000), binds to
 `process.env.HOST` (default `0.0.0.0`), and reads `process.env.ORIGIN` to
 enforce same-origin POSTs when behind a proxy. Body size is capped by
-`process.env.BODY_SIZE_LIMIT` (default 512 KB upstream; the Docker image
-bumps this to `2M`).
+`process.env.BODY_SIZE_LIMIT` (default 512 KB; bump to `2M` if you ingest
+larger card payloads).
 
-## Docker
-
-The [`Dockerfile`](../Dockerfile) is a 3-stage build (`base`, `deps`,
-`builder`, `runner`) using `oven/bun:1`.
-
-```bash
-docker build -t cottage-study \
-    --build-arg PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_... \
-    --build-arg PUBLIC_TURNSTILE_SITE_KEY=0x4AA... \
-    .
-
-docker run -p 3000:3000 \
-    --env-file .env \
-    -v $(pwd)/data:/data \
-    cottage-study
-```
-
-Things to know:
-
-- **`PUBLIC_*` vars are baked at build time.** The `--build-arg` flags above
-  feed them into the `builder` stage so they end up in the client bundle. If
-  you change a `PUBLIC_*` value you must rebuild the image.
-- **Server-only secrets are runtime.** `CLERK_SECRET_KEY` and
-  `TURNSTILE_SECRET_KEY` come from `--env-file` (or `-e`) and can be rotated
-  without rebuilding.
-- **`/data` is the database volume.** The image sets `DB_PATH=/data/study.db`
-  and runs as the unprivileged `bun` user. Mount `/data` as a host volume or
-  named volume so SQLite (and its WAL files) survive container restarts.
-- **Port** is `EXPOSE`d as 3000. The `CMD` is `bun run build/index.js`.
-- **`/reset`** is automatically 404'd because `NODE_ENV=production` is set in
-  the runner stage.
-
-### Runtime env in the container
-
-`Dockerfile` sets these defaults; override via `-e` or `--env-file`:
-
-| Variable          | Default            | Purpose                                                  |
-| ----------------- | ------------------ | -------------------------------------------------------- |
-| `NODE_ENV`        | `production`       | Toggles fail-closed Turnstile + disables `/reset`.       |
-| `PORT`            | `3000`             | adapter-node listens here.                               |
-| `HOST`            | `0.0.0.0`          | adapter-node bind address.                               |
-| `BODY_SIZE_LIMIT` | `2M`               | Override if you want to ingest larger card payloads.     |
-| `DB_PATH`         | `/data/study.db`   | The volume mount target.                                 |
-
-### Reverse proxy
+## Reverse proxy
 
 If you put Caddy / nginx / Cloudflare in front, set `ORIGIN` to the public
 URL (e.g. `https://study.cottageindustries.xyz`) — adapter-node uses it for
 CSRF protection on form posts. Without it, mismatched-origin errors look like
 `Cross-site POST form submissions are forbidden` in production logs.
 
-## Plain Bun
+## Running with Bun
 
-Useful when you don't want a container — single VPS, systemd unit, fly
-machine, etc.
+Single VPS, systemd unit, fly machine, etc.
 
 ```bash
 bun install --production
@@ -123,8 +77,8 @@ WantedBy=multi-user.target
 ```
 
 `/etc/cottage-study/env` should contain the same vars listed in
-[Plain Bun](#plain-bun) above. Make sure the `cottage` user owns whatever
-directory `DB_PATH` points at.
+[Running with Bun](#running-with-bun) above. Make sure the `cottage` user
+owns whatever directory `DB_PATH` points at.
 
 ## Persistence
 
@@ -138,7 +92,7 @@ in mind:
   is safe with WAL. A naïve `cp` while writes are happening will produce a
   corrupt copy.
 - **No connection pool needed.** `bun:sqlite` is in-process and the SvelteKit
-  app is single-process by design — multiple containers writing to the same
+  app is single-process by design — multiple processes writing to the same
   SQLite file is *not* supported.
 
 ## Operational checklist
@@ -149,8 +103,8 @@ Before promoting to prod the first time:
 - [ ] Turnstile widget hostnames include the public domain.
 - [ ] Clerk redirect allowlist includes `https://<your-domain>/sign-in/sso-callback`.
 - [ ] `ORIGIN` matches the public URL exactly (scheme + host, no trailing slash).
-- [ ] `DB_PATH` points at a persistent volume; the directory exists and is
-      writable by the container/user.
+- [ ] `DB_PATH` points at persistent storage; the directory exists and is
+      writable by the service user.
 - [ ] `NODE_ENV=production` is set (this is what makes `/reset` 404 and what
       flips Turnstile to fail-closed mode).
 - [ ] First user signs up successfully end-to-end with a real OAuth provider.

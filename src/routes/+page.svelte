@@ -3,6 +3,34 @@
 
 	const ctx = useClerkSafe();
 	const isSignedIn = $derived(!!ctx.auth.userId);
+
+	let flipped = $state(false);
+	let tiltX = $state(0);
+	let tiltY = $state(0);
+	let tilting = $state(false);
+
+	const MAX_TILT_X = 9;
+	const MAX_TILT_Y = 13;
+
+	function onTilt(event: MouseEvent) {
+		const el = event.currentTarget as HTMLElement;
+		const rect = el.getBoundingClientRect();
+		const px = (event.clientX - rect.left) / rect.width - 0.5;
+		const py = (event.clientY - rect.top) / rect.height - 0.5;
+		tiltY = px * 2 * MAX_TILT_Y;
+		tiltX = -py * 2 * MAX_TILT_X;
+		tilting = true;
+	}
+
+	function resetTilt() {
+		tiltX = 0;
+		tiltY = 0;
+		tilting = false;
+	}
+
+	function toggleFlip() {
+		flipped = !flipped;
+	}
 </script>
 
 <svelte:head>
@@ -29,7 +57,7 @@
 			>
 				Learn things
 				<span
-					class="font-display text-transparent italic bg-clip-text bg-gradient-to-r from-orange-400 via-amber-400 to-orange-500"
+					class="font-display text-transparent italic bg-clip-text bg-linear-to-r from-orange-400 via-amber-400 to-orange-500"
 					style="font-variation-settings: 'opsz' 144, 'SOFT' 100;"
 				>
 					on purpose.
@@ -71,35 +99,89 @@
 		</div>
 
 		<!-- Floating preview card -->
-		<div class="relative mx-auto mt-20 max-w-2xl rise-in" style="animation-delay: 200ms;">
+		<div
+			class="relative mx-auto mt-20 max-w-2xl rise-in"
+			style="animation-delay: 200ms; perspective: 1600px;"
+		>
 			<div
-				class="absolute -inset-px rounded-3xl bg-gradient-to-b from-orange-500/30 via-orange-500/5 to-transparent blur-xl"
+				class="pointer-events-none absolute -inset-px rounded-3xl bg-linear-to-b from-orange-500/30 via-orange-500/5 to-transparent blur-xl"
 			></div>
-			<div
-				class="relative grain overflow-hidden rounded-3xl border border-zinc-800/70 bg-zinc-900/60 p-8 shadow-2xl shadow-black/50 backdrop-blur-2xl sm:p-12"
+			<button
+				type="button"
+				onclick={toggleFlip}
+				onmousemove={onTilt}
+				onmouseleave={resetTilt}
+				aria-pressed={flipped}
+				aria-label={flipped ? 'Show term' : 'Show definition'}
+				class="relative block w-full cursor-pointer text-left rounded-3xl focus:outline-none focus-visible:ring-2 focus-visible:ring-orange-500/60"
+				style="transform-style: preserve-3d; transform: rotateX({tiltX}deg) rotateY({tiltY}deg); transition: transform {tilting ? 120 : 500}ms cubic-bezier(0.22, 1, 0.36, 1); will-change: transform;"
 			>
-				<div class="flex items-center justify-between">
-					<div class="text-xs font-mono tracking-widest uppercase text-zinc-500">
-						Card 3 / 24
-					</div>
-					<div class="flex h-2 w-32 overflow-hidden rounded-full bg-zinc-800">
-						<div class="w-1/8 rounded-full bg-orange-500"></div>
-					</div>
-				</div>
-				<div class="my-12 text-center">
-					<p
-						class="font-display text-4xl font-medium tracking-tight text-white sm:text-5xl"
-						style="font-variation-settings: 'opsz' 144, 'SOFT' 30;"
+				<div
+					class="relative grid"
+					style="transform-style: preserve-3d; transform: rotateY({flipped
+						? 180
+						: 0}deg); transition: transform 750ms cubic-bezier(0.22, 1, 0.36, 1);"
+				>
+					<!-- Front face -->
+					<div
+						class="grain col-start-1 row-start-1 flex flex-col overflow-hidden rounded-3xl border border-zinc-800/70 bg-zinc-900/60 p-8 shadow-2xl shadow-black/50 backdrop-blur-2xl sm:p-12"
+						style="backface-visibility: hidden; -webkit-backface-visibility: hidden;"
 					>
-						<em>verisimilitude</em>
-					</p>
-					<p class="mt-4 text-sm text-zinc-500 font-mono">tap to flip</p>
+						<div class="flex items-center justify-between">
+							<div class="text-xs font-mono tracking-widest uppercase text-zinc-500">
+								Card 3 / 24
+							</div>
+							<div class="flex h-2 w-32 overflow-hidden rounded-full bg-zinc-800">
+								<div class="w-1/8 rounded-full bg-orange-500"></div>
+							</div>
+						</div>
+						<div class="my-12 flex flex-1 flex-col justify-center text-center">
+							<p
+								class="font-display text-4xl font-medium tracking-tight text-white sm:text-5xl"
+								style="font-variation-settings: 'opsz' 144, 'SOFT' 30;"
+							>
+								<em>verisimilitude</em>
+							</p>
+							<p class="mt-4 text-sm text-zinc-500 font-mono">tap to flip</p>
+						</div>
+						<div class="flex items-center justify-between border-t border-zinc-800/70 pt-5 text-xs">
+							<span class="text-zinc-500">SAT prep &mdash; week 4</span>
+							<span class="text-orange-400">+ 3 mastered today</span>
+						</div>
+					</div>
+
+					<!-- Back face -->
+					<div
+						class="grain col-start-1 row-start-1 flex flex-col overflow-hidden rounded-3xl border border-zinc-800/70 bg-zinc-900/60 p-8 shadow-2xl shadow-black/50 backdrop-blur-2xl sm:p-12"
+						style="backface-visibility: hidden; -webkit-backface-visibility: hidden; transform: rotateY(180deg);"
+					>
+						<div class="flex items-center justify-between">
+							<div class="text-xs font-mono tracking-widest uppercase text-zinc-500">
+								Card 3 / 24
+							</div>
+							<div class="flex h-2 w-32 overflow-hidden rounded-full bg-zinc-800">
+								<div class="w-1/8 rounded-full bg-orange-500"></div>
+							</div>
+						</div>
+						<div class="my-12 flex flex-1 flex-col justify-center text-center">
+							<p class="mb-4 font-mono text-xs tracking-widest text-orange-500 uppercase">
+								/ Definition
+							</p>
+							<p
+								class="font-display text-2xl leading-snug font-medium text-white sm:text-3xl"
+								style="font-variation-settings: 'opsz' 144, 'SOFT' 30;"
+							>
+								The appearance of being true or real &mdash; the ring of authenticity in fiction.
+							</p>
+							<p class="mt-5 text-sm text-zinc-500 font-mono">tap to flip back</p>
+						</div>
+						<div class="flex items-center justify-between border-t border-zinc-800/70 pt-5 text-xs">
+							<span class="text-zinc-500">SAT prep &mdash; week 4</span>
+							<span class="text-orange-400">+ 3 mastered today</span>
+						</div>
+					</div>
 				</div>
-				<div class="flex items-center justify-between border-t border-zinc-800/70 pt-5 text-xs">
-					<span class="text-zinc-500">SAT prep &mdash; week 4</span>
-					<span class="text-orange-400">+ 3 mastered today</span>
-				</div>
-			</div>
+			</button>
 		</div>
 	</div>
 </section>
