@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import CardRowsEditor from '$lib/components/CardRowsEditor.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
@@ -18,9 +19,7 @@
 	);
 </script>
 
-<svelte:head>
-	<title>Editing &mdash; {data.set.title}</title>
-</svelte:head>
+<Seo title="Editing — {data.set.title}" titleTemplate={false} path="/sets/{data.set.id}/edit" noindex />
 
 <section class="relative py-16 sm:py-20">
 	<div class="mx-auto max-w-4xl px-6">

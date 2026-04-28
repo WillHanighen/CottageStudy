@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Seo from '$lib/components/Seo.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -98,9 +99,13 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Learning &mdash; {data.set.title}</title>
-</svelte:head>
+<Seo
+	title="Learn — {data.set.title}"
+	titleTemplate={false}
+	description="Quiz yourself round-by-round on {data.set.title}."
+	path="/sets/{data.set.id}/learn"
+	noindex
+/>
 
 <section class="relative py-10 sm:py-14">
 	<div class="mx-auto max-w-2xl px-6">

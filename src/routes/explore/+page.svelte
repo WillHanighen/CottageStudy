@@ -1,12 +1,32 @@
 <script lang="ts">
 	import type { PageData } from './$types';
+	import Seo from '$lib/components/Seo.svelte';
 
 	let { data }: { data: PageData } = $props();
+
+	const seoTitle = $derived(data.q ? `“${data.q}” — Explore public sets` : 'Explore public sets');
+	const seoDesc = $derived(
+		data.q
+			? `Public flashcard sets matching “${data.q}” on CottageStudy. Click in and study.`
+			: 'Browse public flashcard sets shared by the CottageStudy community. Free to study, no account needed.'
+	);
+	// Don't index search-result variants — only the canonical /explore index.
+	const noindex = $derived(Boolean(data.q));
 </script>
 
-<svelte:head>
-	<title>Explore &mdash; CottageStudy</title>
-</svelte:head>
+<Seo
+	title={seoTitle}
+	description={seoDesc}
+	path="/explore"
+	{noindex}
+	keywords={[
+		'public flashcards',
+		'shared study sets',
+		'free flashcards online',
+		'flashcard library',
+		'CottageStudy explore'
+	]}
+/>
 
 <section class="relative py-16 sm:py-24">
 	<div class="mx-auto max-w-6xl px-6">

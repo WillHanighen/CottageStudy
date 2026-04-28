@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { useClerkSafe } from '$lib/clerk';
+	import Seo from '$lib/components/Seo.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -20,9 +21,12 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Library &mdash; CottageStudy</title>
-</svelte:head>
+<Seo
+	title="Library"
+	description="Your personal library of CottageStudy flashcard sets."
+	path="/dashboard"
+	noindex
+/>
 
 <section class="relative py-16 sm:py-24">
 	<div class="mx-auto max-w-6xl px-6">

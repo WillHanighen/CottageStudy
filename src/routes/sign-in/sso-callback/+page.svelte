@@ -2,6 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { useClerkSafe } from '$lib/clerk';
+	import Seo from '$lib/components/Seo.svelte';
 
 	type ClerkClient = {
 		loaded?: boolean;
@@ -94,9 +95,7 @@
 	});
 </script>
 
-<svelte:head>
-	<title>Signing in&hellip; &mdash; CottageStudy</title>
-</svelte:head>
+<Seo title="Signing in…" description="Completing sign-in." path="/sign-in/sso-callback" noindex />
 
 <div class="flex min-h-[60vh] items-center justify-center px-6">
 	<div class="text-center">

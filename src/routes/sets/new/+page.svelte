@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import CardRowsEditor from '$lib/components/CardRowsEditor.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import type { ActionData } from './$types';
 
 	let { form }: { form: ActionData } = $props();
@@ -81,9 +82,12 @@
 	}
 </script>
 
-<svelte:head>
-	<title>New study set &mdash; CottageStudy</title>
-</svelte:head>
+<Seo
+	title="New study set"
+	description="Create a new flashcard set on CottageStudy."
+	path="/sets/new"
+	noindex
+/>
 
 <section class="relative py-16 sm:py-20">
 	<div class="mx-auto max-w-4xl px-6">

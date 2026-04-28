@@ -1,8 +1,40 @@
 <script lang="ts">
 	import { useClerkSafe } from '$lib/clerk';
+	import Seo from '$lib/components/Seo.svelte';
+	import { SITE_NAME, SITE_URL, SITE_DESCRIPTION } from '$lib/seo';
 
 	const ctx = useClerkSafe();
 	const isSignedIn = $derived(!!ctx.auth.userId);
+
+	const homeJsonLd = [
+		{
+			'@context': 'https://schema.org',
+			'@type': 'WebSite',
+			name: SITE_NAME,
+			url: SITE_URL,
+			description: SITE_DESCRIPTION,
+			potentialAction: {
+				'@type': 'SearchAction',
+				target: `${SITE_URL}/explore?q={search_term_string}`,
+				'query-input': 'required name=search_term_string'
+			}
+		},
+		{
+			'@context': 'https://schema.org',
+			'@type': 'SoftwareApplication',
+			name: SITE_NAME,
+			applicationCategory: 'EducationalApplication',
+			operatingSystem: 'Any',
+			description: SITE_DESCRIPTION,
+			url: SITE_URL,
+			offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
+			publisher: {
+				'@type': 'Organization',
+				name: 'Cottage Industries',
+				url: 'https://cottageindustries.xyz'
+			}
+		}
+	];
 
 	let flipped = $state(false);
 	let tiltX = $state(0);
@@ -33,13 +65,13 @@
 	}
 </script>
 
-<svelte:head>
-	<title>CottageStudy — Flashcards built for focus</title>
-	<meta
-		name="description"
-		content="Make flashcards, study with focus. CottageStudy is a calm, fast study tool for terms, definitions, and the things you actually want to remember."
-	/>
-</svelte:head>
+<Seo
+	title="CottageStudy — Flashcards built for focus"
+	titleTemplate={false}
+	description="Make flashcards in seconds and practice them four ways — flashcards, learn, quiz, match. A calm, fast, ad-free study tool for the things you actually want to remember."
+	path="/"
+	jsonLd={homeJsonLd}
+/>
 
 <!-- Hero -->
 <section class="relative overflow-hidden py-24 sm:py-32 lg:py-40">

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import SignInProviders from '$lib/components/SignInProviders.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import { useClerkSafe } from '$lib/clerk';
 	import type { PageData } from './$types';
 
@@ -20,9 +21,12 @@
 	});
 </script>
 
-<svelte:head>
-	<title>Sign in &mdash; CottageStudy</title>
-</svelte:head>
+<Seo
+	title="Sign in"
+	description="Sign in to CottageStudy to build, save, and share flashcard sets."
+	path="/sign-in"
+	noindex
+/>
 
 <section
 	class="relative isolate flex min-h-[80vh] items-center justify-center overflow-hidden py-12 sm:py-24"

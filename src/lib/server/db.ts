@@ -66,6 +66,20 @@ const now = () => Date.now();
 const id = () => crypto.randomUUID();
 
 export const queries = {
+	listPublicSetsForSitemap(limit = 5000): Array<{ id: string; updated_at: number }> {
+		return db
+			.query<{ id: string; updated_at: number }, [number]>(
+				`SELECT s.id, s.updated_at
+				 FROM sets s
+				 INNER JOIN cards c ON c.set_id = s.id
+				 WHERE s.is_public = 1
+				 GROUP BY s.id
+				 ORDER BY s.updated_at DESC
+				 LIMIT ?`
+			)
+			.all(limit);
+	},
+
 	listSetsByUser(userId: string): StudySetWithCount[] {
 		return db
 			.query<StudySetWithCount, [string]>(

@@ -1,11 +1,45 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import type { PageData } from './$types';
+	import Seo from '$lib/components/Seo.svelte';
+	import { SITE_NAME, SITE_URL } from '$lib/seo';
 
 	let { data }: { data: PageData } = $props();
 	const set = $derived(data.set);
 
 	let confirmingDelete = $state(false);
+
+	function clip(text: string, max = 160): string {
+		const t = text.replace(/\s+/g, ' ').trim();
+		if (t.length <= max) return t;
+		return t.slice(0, max - 1).trimEnd() + '…';
+	}
+
+	const isPublic = $derived(set.is_public === 1);
+	const setUrl = $derived(`${SITE_URL}/sets/${set.id}`);
+	const setDescription = $derived(
+		clip(
+			set.description?.trim()
+				? set.description
+				: `Study “${set.title}” — ${set.cards.length} ${set.cards.length === 1 ? 'flashcard' : 'flashcards'} on CottageStudy. Practice with flashcards, learn, quiz, and match modes.`
+		)
+	);
+
+	const setJsonLd = $derived({
+		'@context': 'https://schema.org',
+		'@type': 'LearningResource',
+		name: set.title,
+		description: setDescription,
+		url: setUrl,
+		inLanguage: 'en',
+		learningResourceType: 'Flashcards',
+		educationalUse: 'self-study',
+		dateModified: new Date(set.updated_at).toISOString(),
+		dateCreated: new Date(set.created_at).toISOString(),
+		isAccessibleForFree: true,
+		numberOfItems: set.cards.length,
+		isPartOf: { '@type': 'WebSite', name: SITE_NAME, url: SITE_URL }
+	});
 
 	function timeAgo(ts: number): string {
 		const diff = Date.now() - ts;
@@ -20,9 +54,16 @@
 	}
 </script>
 
-<svelte:head>
-	<title>{set.title} &mdash; CottageStudy</title>
-</svelte:head>
+<Seo
+	title={set.title}
+	description={setDescription}
+	path="/sets/{set.id}"
+	type="article"
+	noindex={!isPublic}
+	modifiedTime={new Date(set.updated_at).toISOString()}
+	publishedTime={new Date(set.created_at).toISOString()}
+	jsonLd={isPublic ? setJsonLd : undefined}
+/>
 
 <section class="relative py-12 sm:py-16">
 	<div class="mx-auto max-w-5xl px-6">

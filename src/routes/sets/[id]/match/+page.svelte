@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import Seo from '$lib/components/Seo.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -130,9 +131,13 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Match &mdash; {data.set.title}</title>
-</svelte:head>
+<Seo
+	title="Match — {data.set.title}"
+	titleTemplate={false}
+	description="Race the clock to pair every term with its definition for {data.set.title}."
+	path="/sets/{data.set.id}/match"
+	noindex
+/>
 
 <section class="relative py-10 sm:py-14">
 	<div class="mx-auto max-w-5xl px-6">

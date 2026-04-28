@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import Seo from '$lib/components/Seo.svelte';
 
 	const status = $derived(page.status);
 	const message = $derived(page.error?.message ?? '');
@@ -22,9 +23,7 @@
 	});
 </script>
 
-<svelte:head>
-	<title>{status} — CottageStudy</title>
-</svelte:head>
+<Seo title="{status} — {title}" titleTemplate={false} description={blurb} noindex />
 
 <section class="relative overflow-hidden py-24 sm:py-32 lg:py-40">
 	<div class="relative mx-auto max-w-3xl px-6">
