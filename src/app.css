@@ -7,6 +7,11 @@
 		'Helvetica Neue', Arial, sans-serif;
 	--font-display: 'Fraunces', ui-serif, Georgia, 'Times New Roman', serif;
 	--font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+	/* Smoother default transitions across the app — used by Tailwind's
+	   `transition`, `transition-colors`, `transition-all`, etc. */
+	--default-transition-duration: 260ms;
+	--default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html {
@@ -97,6 +102,13 @@ button:focus-visible {
 }
 .flashcard-face--back {
 	transform: rotateY(180deg);
+}
+
+/* Clerk modal backdrop — keep it dark instead of the default light overlay. */
+:where(.cl-modalBackdrop, [class*='cl-modalBackdrop']) {
+	background-color: rgb(9 9 11 / 0.8) !important;
+	backdrop-filter: blur(8px) !important;
+	-webkit-backdrop-filter: blur(8px) !important;
 }
 
 /* Subtle grain overlay used in cards */

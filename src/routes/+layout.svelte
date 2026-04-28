@@ -46,7 +46,9 @@
 				'border border-zinc-800 bg-zinc-900/60 hover:bg-zinc-800/70 text-zinc-100',
 			formButtonPrimary:
 				'bg-orange-500 hover:bg-orange-600 text-white shadow-lg shadow-orange-500/20',
-			footerActionLink: 'text-orange-500 hover:text-orange-400'
+			footerActionLink: 'text-orange-500 hover:text-orange-400',
+			modalBackdrop: 'bg-zinc-950/80 backdrop-blur-md',
+			modalContent: 'shadow-2xl shadow-black/60'
 		}
 	};
 </script>
