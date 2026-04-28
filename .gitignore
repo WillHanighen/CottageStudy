@@ -1,0 +1,14 @@
+node_modules
+.svelte-kit
+build
+.vercel
+.output
+data
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+.DS_Store
+.env
+.env.*
+!.env.example
