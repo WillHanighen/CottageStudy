@@ -340,9 +340,15 @@
 						value={guide}
 						oninput={onGuideInput}
 						rows="10"
-						placeholder="Paste your notes, outline, or chapter summary here. The model will decide whether there's enough material to make flashcards."
+						placeholder="Paste your notes, outline, or chapter summary here. The model will decide whether there's enough material to make notecards."
 						class="block w-full resize-y rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm leading-relaxed text-white placeholder:text-zinc-700 transition-colors focus:border-orange-500 focus:outline-none"
 					></textarea>
+					<p class="mt-1 text-[12px] text-zinc-500">
+						Note: Different models have different maximum input (token) lengths.
+						<br>Words, text characters, individual numbers, etc. do not map to individual tokens.
+						<br>AI is not perfect or deterministic. Outputs may be incomplete, incorrect, or otherwise unsuitable.
+						<br>Always double-check AI generated output for accuracy, completeness, relevence, and suitability.
+					</p>
 				</div>
 
 				{#if errorMessage}

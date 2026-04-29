@@ -8,7 +8,7 @@ const KEY_STORAGE = 'cottage.ai.openrouterKey';
 const MODEL_STORAGE = 'cottage.ai.model';
 
 export const DEFAULT_MODEL = 'moonshotai/kimi-k2.5';
-export const MAX_GUIDE_CHARS = 96_000;
+export const MAX_GUIDE_CHARS = 256_000;
 
 function hasStorage(): boolean {
 	if (typeof window === 'undefined') return false;
