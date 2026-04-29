@@ -1,4 +1,5 @@
 import { error, fail, redirect } from '@sveltejs/kit';
+import { NotecardLimitError } from '$lib/server/notecardValidation';
 import { queries } from '$lib/server/db';
 import { getAuth } from '$lib/server/auth';
 import type { Actions, PageServerLoad } from './$types';
@@ -26,7 +27,6 @@ export const actions: Actions = {
 		const cardsRaw = String(data.get('cards') ?? '[]');
 
 		if (!title) return fail(400, { error: 'Title is required.' });
-		if (title.length > 200) return fail(400, { error: 'Title is too long (max 200).' });
 
 		let cards: Array<{ term: string; definition: string }> = [];
 		try {
@@ -43,15 +43,22 @@ export const actions: Actions = {
 			return fail(400, { error: 'Could not parse cards.' });
 		}
 
-		const updated = queries.updateSet({
-			setId: params.id,
-			userId,
-			title,
-			description,
-			isPublic
-		});
-		if (!updated) return fail(404, { error: 'Set not found.' });
-		queries.replaceCards(params.id, cards);
+		try {
+			const updated = queries.updateSet({
+				setId: params.id,
+				userId,
+				title,
+				description,
+				isPublic
+			});
+			if (!updated) return fail(404, { error: 'Set not found.' });
+			queries.replaceCards(params.id, cards);
+		} catch (err) {
+			if (err instanceof NotecardLimitError) {
+				return fail(400, { error: err.message });
+			}
+			throw err;
+		}
 
 		throw redirect(303, `/sets/${params.id}`);
 	}

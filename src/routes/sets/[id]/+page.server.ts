@@ -10,15 +10,34 @@ export const load: PageServerLoad = ({ params, locals }) => {
 	const { userId } = getAuth(locals);
 	const isOwner = userId === set.user_id;
 
+	const hasReported = Boolean(
+		userId && !isOwner && queries.hasUserReportedSet(params.id, userId)
+	);
+
 	if (!set.is_public && !isOwner) {
 		if (!userId) throw redirect(303, `/sign-in?redirect=/sets/${params.id}`);
 		throw error(403, 'This set is private.');
 	}
 
-	return { set, isOwner };
+	return { set, isOwner, isAuthenticated: Boolean(userId), hasReported };
 };
 
 export const actions: Actions = {
+	report: async ({ params, locals }) => {
+		const { userId } = getAuth(locals);
+		if (!userId) throw redirect(303, `/sign-in?redirect=/sets/${params.id}`);
+
+		const result = queries.addSetReport(params.id, userId);
+		if (!result.ok) {
+			if (result.error === 'owner') return fail(400, { reportError: 'You cannot report your own set.' });
+			if (result.error === 'not_public') return fail(400, { reportError: 'This set is not public.' });
+			throw error(404, 'Study set not found');
+		}
+
+		if (result.demoted) throw redirect(303, '/explore?demoted=1');
+		throw redirect(303, `/sets/${params.id}?reported=1`);
+	},
+
 	delete: async ({ params, locals }) => {
 		const { userId } = getAuth(locals);
 		if (!userId) return fail(401, { error: 'Sign in required.' });

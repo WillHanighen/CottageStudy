@@ -1,4 +1,5 @@
 import { fail, redirect } from '@sveltejs/kit';
+import { NotecardLimitError } from '$lib/server/notecardValidation';
 import { queries } from '$lib/server/db';
 import { getAuth } from '$lib/server/auth';
 import type { Actions, PageServerLoad } from './$types';
@@ -23,9 +24,6 @@ export const actions: Actions = {
 		if (!title) {
 			return fail(400, { error: 'Title is required.', title, description });
 		}
-		if (title.length > 200) {
-			return fail(400, { error: 'Title is too long (max 200 characters).', title, description });
-		}
 
 		let cards: Array<{ term: string; definition: string }> = [];
 		try {
@@ -42,9 +40,17 @@ export const actions: Actions = {
 			return fail(400, { error: 'Could not read flashcard data.', title, description });
 		}
 
-		const setId = queries.createSet({ userId, title, description, isPublic });
-		if (cards.length > 0) {
-			queries.replaceCards(setId, cards);
+		let setId: string;
+		try {
+			setId = queries.createSet({ userId, title, description, isPublic });
+			if (cards.length > 0) {
+				queries.replaceCards(setId, cards);
+			}
+		} catch (err) {
+			if (err instanceof NotecardLimitError) {
+				return fail(400, { error: err.message, title, description });
+			}
+			throw err;
 		}
 
 		throw redirect(303, `/sets/${setId}`);

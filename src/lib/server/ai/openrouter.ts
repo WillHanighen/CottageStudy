@@ -1,3 +1,9 @@
+import {
+	MAX_CARD_DEFINITION_CHARS,
+	MAX_CARD_TERM_CHARS,
+	MAX_SET_TITLE_CHARS
+} from '$lib/notecardLimits';
+
 export const DEFAULT_MODEL = 'moonshotai/kimi-k2.5';
 export const MAX_GUIDE_CHARS = 96_000;
 
@@ -15,7 +21,7 @@ const SYSTEM_PROMPT = [
 	'Otherwise respond with:',
 	'{"status":"ok","title":"<short title or empty string>","cards":[{"term":"...","definition":"..."}, ...]}',
 	'',
-	'Aim for 8 to 40 cards. Terms must be 120 characters or fewer. Definitions must be 500 characters or fewer.',
+	`Aim for 8 to 40 cards. Terms must be ${MAX_CARD_TERM_CHARS} characters or fewer. Definitions must be ${MAX_CARD_DEFINITION_CHARS} characters or fewer.`,
 	'Each card should test a single discrete fact. Do not duplicate cards. Do not include numbering in the term.',
 	'Output ONLY JSON conforming to the schema. No markdown, no commentary.'
 ].join('\n');
@@ -87,8 +93,8 @@ function normalizeResult(raw: unknown): GenerateResult {
 			.map((c) => {
 				const o = (c ?? {}) as Record<string, unknown>;
 				return {
-					term: clampString(o.term, 120).trim(),
-					definition: clampString(o.definition, 500).trim()
+					term: clampString(o.term, MAX_CARD_TERM_CHARS).trim(),
+					definition: clampString(o.definition, MAX_CARD_DEFINITION_CHARS).trim()
 				};
 			})
 			.filter((c) => c.term && c.definition)
@@ -103,7 +109,7 @@ function normalizeResult(raw: unknown): GenerateResult {
 
 		return {
 			status: 'ok',
-			title: clampString(obj.title, 200).trim(),
+			title: clampString(obj.title, MAX_SET_TITLE_CHARS).trim(),
 			cards
 		};
 	}

@@ -1,8 +1,15 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import CardRowsEditor from '$lib/components/CardRowsEditor.svelte';
-	import Seo from '$lib/components/Seo.svelte';
 	import AiGenerateModal from '$lib/components/AiGenerateModal.svelte';
+	import CardRowsEditor from '$lib/components/CardRowsEditor.svelte';
+	import CharBudgetLabel from '$lib/components/CharBudgetLabel.svelte';
+	import Seo from '$lib/components/Seo.svelte';
+	import {
+		MAX_CARD_DEFINITION_CHARS,
+		MAX_CARD_TERM_CHARS,
+		MAX_SET_DESCRIPTION_CHARS,
+		MAX_SET_TITLE_CHARS
+	} from '$lib/notecardLimits';
 	import type { ActionData } from './$types';
 
 	let { form }: { form: ActionData } = $props();
@@ -30,9 +37,15 @@
 	function onAiResult(payload: { title: string; cards: Array<{ term: string; definition: string }> }) {
 		const generated = payload.cards.filter((c) => c.term.trim() || c.definition.trim());
 		if (!title.trim() && payload.title.trim()) {
-			title = payload.title.slice(0, 200);
+			title = payload.title.slice(0, MAX_SET_TITLE_CHARS);
 		}
-		rows = generated.length > 0 ? generated : [{ term: '', definition: '' }];
+		rows =
+			generated.length > 0
+				? generated.map((c) => ({
+						term: c.term.slice(0, MAX_CARD_TERM_CHARS),
+						definition: c.definition.slice(0, MAX_CARD_DEFINITION_CHARS)
+					}))
+				: [{ term: '', definition: '' }];
 		importStatus = {
 			kind: 'ok',
 			message: `Generated ${generated.length} ${generated.length === 1 ? 'card' : 'cards'} — review before saving.`
@@ -63,17 +76,17 @@
 				.map((c) => {
 					const obj = (c ?? {}) as Record<string, unknown>;
 					return {
-						term: String(obj.term ?? ''),
-						definition: String(obj.definition ?? '')
+						term: String(obj.term ?? '').slice(0, MAX_CARD_TERM_CHARS),
+						definition: String(obj.definition ?? '').slice(0, MAX_CARD_DEFINITION_CHARS)
 					};
 				})
 				.filter((r) => r.term.trim() || r.definition.trim());
 
 			if (typeof data.title === 'string' && data.title.trim()) {
-				title = data.title.slice(0, 200);
+				title = data.title.slice(0, MAX_SET_TITLE_CHARS);
 			}
 			if (typeof data.description === 'string') {
-				description = data.description;
+				description = data.description.slice(0, MAX_SET_DESCRIPTION_CHARS);
 			}
 			if (typeof data.is_public === 'boolean') {
 				isPublic = data.is_public;
@@ -117,7 +130,7 @@
 					Create a
 					<span
 						class="font-display italic"
-						style="font-variation-settings: 'opsz' 144, 'SOFT' 100;"
+						style="font-variation-settings: 'opsz' 144, 'SOFT' 100; color: #ff7316;"
 					>
 						study set
 					</span>
@@ -207,34 +220,41 @@
 				class="grain space-y-5 rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-6 backdrop-blur-sm sm:p-8"
 			>
 				<div>
-					<label
-						class="mb-2 block font-mono text-[10px] tracking-widest text-zinc-500 uppercase"
-						for="title"
-					>
-						Title
-					</label>
+					<div class="mb-2 flex items-end justify-between gap-3">
+						<label
+							class="block font-mono text-[10px] tracking-widest text-zinc-500 uppercase"
+							for="title"
+						>
+							Title
+						</label>
+						<CharBudgetLabel length={title.length} max={MAX_SET_TITLE_CHARS} />
+					</div>
 					<input
 						id="title"
 						name="title"
 						type="text"
 						required
-						maxlength="200"
+						maxlength={MAX_SET_TITLE_CHARS}
 						placeholder="Spanish vocabulary &mdash; week 7"
 						bind:value={title}
 						class="block w-full rounded-lg border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-lg text-white placeholder:text-zinc-700 transition-colors focus:border-orange-500"
 					/>
 				</div>
 				<div>
-					<label
-						class="mb-2 block font-mono text-[10px] tracking-widest text-zinc-500 uppercase"
-						for="description"
-					>
-						Description <span class="font-sans normal-case opacity-60">(optional)</span>
-					</label>
+					<div class="mb-2 flex items-end justify-between gap-3">
+						<label
+							class="block font-mono text-[10px] tracking-widest text-zinc-500 uppercase"
+							for="description"
+						>
+							Description <span class="font-sans normal-case opacity-60">(optional)</span>
+						</label>
+						<CharBudgetLabel length={description.length} max={MAX_SET_DESCRIPTION_CHARS} />
+					</div>
 					<textarea
 						id="description"
 						name="description"
 						rows="2"
+						maxlength={MAX_SET_DESCRIPTION_CHARS}
 						placeholder="What's this set for?"
 						bind:value={description}
 						class="block w-full resize-y rounded-lg border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm text-white placeholder:text-zinc-700 transition-colors focus:border-orange-500"

@@ -30,6 +30,15 @@
 
 <section class="relative py-16 sm:py-24">
 	<div class="mx-auto max-w-6xl px-6">
+		{#if data.demotedNotice}
+			<div
+				class="mb-8 rounded-xl border border-amber-500/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100/95"
+				role="status"
+			>
+				That set was removed from public view after multiple reports and can no longer be shared publicly.
+			</div>
+		{/if}
+
 		<div class="mb-10 max-w-2xl rise-in">
 			<p class="mb-3 font-mono text-xs tracking-widest text-orange-500 uppercase">/ Explore</p>
 			<h1 class="text-4xl font-semibold tracking-tight text-white sm:text-5xl">

@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { assertCardsLimits, assertSetLimits } from '$lib/server/notecardValidation';
 
 const DB_PATH = process.env.DB_PATH ?? './data/study.db';
 
@@ -23,6 +24,7 @@ export function initDb(): void {
 			title TEXT NOT NULL,
 			description TEXT NOT NULL DEFAULT '',
 			is_public INTEGER NOT NULL DEFAULT 0,
+			public_locked INTEGER NOT NULL DEFAULT 0,
 			created_at INTEGER NOT NULL,
 			updated_at INTEGER NOT NULL
 		);
@@ -37,7 +39,24 @@ export function initDb(): void {
 			created_at INTEGER NOT NULL
 		);
 		CREATE INDEX IF NOT EXISTS idx_cards_set ON cards(set_id, position);
+
+		CREATE TABLE IF NOT EXISTS set_reports (
+			set_id TEXT NOT NULL REFERENCES sets(id) ON DELETE CASCADE,
+			reporter_user_id TEXT NOT NULL,
+			created_at INTEGER NOT NULL,
+			PRIMARY KEY (set_id, reporter_user_id)
+		);
+		CREATE INDEX IF NOT EXISTS idx_set_reports_set ON set_reports(set_id);
 	`);
+
+	const hasPublicLocked = db
+		.query<{ n: number }, []>(
+			`SELECT COUNT(*) AS n FROM pragma_table_info('sets') WHERE name = 'public_locked'`
+		)
+		.get()?.n;
+	if (!hasPublicLocked) {
+		db.exec(`ALTER TABLE sets ADD COLUMN public_locked INTEGER NOT NULL DEFAULT 0`);
+	}
 }
 
 export type StudySet = {
@@ -46,6 +65,7 @@ export type StudySet = {
 	title: string;
 	description: string;
 	is_public: number;
+	public_locked: number;
 	created_at: number;
 	updated_at: number;
 };
@@ -109,11 +129,12 @@ export const queries = {
 	},
 
 	createSet(input: { userId: string; title: string; description?: string; isPublic?: boolean }): string {
+		assertSetLimits(input.title, input.description ?? '');
 		const setId = id();
 		const t = now();
 		db.run(
-			`INSERT INTO sets (id, user_id, title, description, is_public, created_at, updated_at)
-			 VALUES (?, ?, ?, ?, ?, ?, ?)`,
+			`INSERT INTO sets (id, user_id, title, description, is_public, public_locked, created_at, updated_at)
+			 VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
 			[setId, input.userId, input.title, input.description ?? '', input.isPublic ? 1 : 0, t, t]
 		);
 		return setId;
@@ -126,20 +147,69 @@ export const queries = {
 		description: string;
 		isPublic: boolean;
 	}): boolean {
+		assertSetLimits(input.title, input.description);
+		const row = db
+			.query<{ public_locked: number }, [string, string]>(
+				`SELECT public_locked FROM sets WHERE id = ? AND user_id = ?`
+			)
+			.get(input.setId, input.userId);
+		if (!row) return false;
+		const mayPublish = row.public_locked !== 1;
+		const isPublic = Boolean(input.isPublic && mayPublish);
 		const result = db.run(
 			`UPDATE sets
 			 SET title = ?, description = ?, is_public = ?, updated_at = ?
 			 WHERE id = ? AND user_id = ?`,
-			[
-				input.title,
-				input.description,
-				input.isPublic ? 1 : 0,
-				now(),
-				input.setId,
-				input.userId
-			]
+			[input.title, input.description, isPublic ? 1 : 0, now(), input.setId, input.userId]
 		);
 		return result.changes > 0;
+	},
+
+	hasUserReportedSet(setId: string, reporterUserId: string): boolean {
+		const row = db
+			.query<{ n: number }, [string, string]>(
+				`SELECT COUNT(*) AS n FROM set_reports WHERE set_id = ? AND reporter_user_id = ?`
+			)
+			.get(setId, reporterUserId);
+		return (row?.n ?? 0) > 0;
+	},
+
+	/** Adds a report; at 3 distinct reporters the set is made private and locked from re-publication. */
+	addSetReport(setId: string, reporterUserId: string): {
+		ok: boolean;
+		added: boolean;
+		demoted: boolean;
+		error?: 'not_found' | 'owner' | 'not_public';
+	} {
+		const set = queries.getSet(setId);
+		if (!set) return { ok: false, added: false, demoted: false, error: 'not_found' };
+		if (set.user_id === reporterUserId) return { ok: false, added: false, demoted: false, error: 'owner' };
+		if (set.is_public !== 1) return { ok: false, added: false, demoted: false, error: 'not_public' };
+
+		let added = false;
+		let demoted = false;
+
+		db.transaction(() => {
+			const ins = db.run(
+				`INSERT OR IGNORE INTO set_reports (set_id, reporter_user_id, created_at) VALUES (?, ?, ?)`,
+				[setId, reporterUserId, now()]
+			);
+			added = ins.changes > 0;
+
+			const countRow = db
+				.query<{ n: number }, [string]>(`SELECT COUNT(*) AS n FROM set_reports WHERE set_id = ?`)
+				.get(setId);
+			const n = countRow?.n ?? 0;
+			if (n >= 3) {
+				const r = db.run(
+					`UPDATE sets SET is_public = 0, public_locked = 1, updated_at = ? WHERE id = ? AND public_locked != 1`,
+					[now(), setId]
+				);
+				demoted = r.changes > 0;
+			}
+		})();
+
+		return { ok: true, added, demoted };
 	},
 
 	touchSet(setId: string): void {
@@ -152,6 +222,7 @@ export const queries = {
 	},
 
 	replaceCards(setId: string, cards: Array<{ term: string; definition: string }>): void {
+		assertCardsLimits(cards);
 		const tx = db.transaction((items: Array<{ term: string; definition: string }>) => {
 			db.run(`DELETE FROM cards WHERE set_id = ?`, [setId]);
 			const insert = db.prepare(

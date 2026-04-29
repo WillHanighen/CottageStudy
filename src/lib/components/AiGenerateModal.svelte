@@ -10,6 +10,7 @@
 		clearApiKey
 	} from '$lib/ai/byok';
 	import { encryptEnvelope, fetchServerPublicKey } from '$lib/ai/encrypt';
+	import CharBudgetLabel from '$lib/components/CharBudgetLabel.svelte';
 
 	type Card = { term: string; definition: string };
 	type GenerateOk = { status: 'ok'; title: string; cards: Card[] };
@@ -326,13 +327,7 @@
 						>
 							Study guide
 						</label>
-						<span
-							class="font-mono text-[12px] tabular-nums {guide.length > MAX_GUIDE_CHARS * 0.95
-								? 'text-orange-300'
-								: 'text-zinc-500'}"
-						>
-							{guide.length.toLocaleString()} / {MAX_GUIDE_CHARS.toLocaleString()}
-						</span>
+						<CharBudgetLabel length={guide.length} max={MAX_GUIDE_CHARS} />
 					</div>
 					<textarea
 						id="ai-guide"
@@ -346,8 +341,8 @@
 					<p class="mt-1 text-[12px] text-zinc-500">
 						Note: Different models have different maximum input (token) lengths.
 						<br>Words, text characters, individual numbers, etc. do not map to individual tokens.
-						<br>AI is not perfect or deterministic. Outputs may be incomplete, incorrect, or otherwise unsuitable.
-						<br>Always double-check AI generated output for accuracy, completeness, relevence, and suitability.
+						<br>Diffrent models, providers, and other factors such as load may affect generation speed.
+						<br><strong>AI is not perfect and can make mistakes. Always double-check AI generated output for accuracy, completeness, relevence, and suitability.</strong>
 					</p>
 				</div>
 

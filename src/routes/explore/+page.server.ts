@@ -7,10 +7,11 @@ const RESULT_LIMIT = 60;
 
 export const load: PageServerLoad = ({ url }) => {
 	const q = (url.searchParams.get('q') ?? '').trim();
+	const demotedNotice = url.searchParams.get('demoted') === '1';
 
 	if (!q) {
 		const sets = db
-			.query<PublicSet, []>(
+			.query<PublicSet, [number]>(
 				`SELECT s.*, COUNT(c.id) AS card_count
 				 FROM sets s
 				 LEFT JOIN cards c ON c.set_id = s.id
@@ -21,7 +22,7 @@ export const load: PageServerLoad = ({ url }) => {
 				 LIMIT ?`
 			)
 			.all(RESULT_LIMIT);
-		return { sets, q: '' };
+		return { sets, q: '', demotedNotice };
 	}
 
 	// SQLite LIKE: escape backslash + % + _ so user input is treated literally.
@@ -42,5 +43,5 @@ export const load: PageServerLoad = ({ url }) => {
 		)
 		.all(like, like, RESULT_LIMIT);
 
-	return { sets, q };
+	return { sets, q, demotedNotice };
 };

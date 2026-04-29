@@ -1,4 +1,10 @@
 <script lang="ts">
+	import CharBudgetLabel from '$lib/components/CharBudgetLabel.svelte';
+	import {
+		MAX_CARD_DEFINITION_CHARS,
+		MAX_CARD_TERM_CHARS
+	} from '$lib/notecardLimits';
+
 	type Row = { term: string; definition: string };
 
 	let {
@@ -76,16 +82,20 @@
 
 			<!-- Term -->
 			<div class="px-5 py-4">
-				<label
-					for="row-term-{i}"
-					class="mb-2 block font-mono text-[10px] tracking-widest text-zinc-500 uppercase"
-				>
-					Term
-				</label>
+				<div class="mb-2 flex items-end justify-between gap-3">
+					<label
+						for="row-term-{i}"
+						class="block font-mono text-[10px] tracking-widest text-zinc-500 uppercase"
+					>
+						Term
+					</label>
+					<CharBudgetLabel length={row.term.length} max={MAX_CARD_TERM_CHARS} />
+				</div>
 				<textarea
 					id="row-term-{i}"
 					data-row-term
 					bind:value={row.term}
+					maxlength={MAX_CARD_TERM_CHARS}
 					rows="1"
 					use:autoresize={row.term}
 					placeholder="Enter term"
@@ -100,15 +110,19 @@
 
 			<!-- Definition -->
 			<div class="border-t border-zinc-800/60 px-5 py-4 md:border-t-0">
-				<label
-					for="row-def-{i}"
-					class="mb-2 block font-mono text-[10px] tracking-widest text-zinc-500 uppercase"
-				>
-					Definition
-				</label>
+				<div class="mb-2 flex items-end justify-between gap-3">
+					<label
+						for="row-def-{i}"
+						class="block font-mono text-[10px] tracking-widest text-zinc-500 uppercase"
+					>
+						Definition
+					</label>
+					<CharBudgetLabel length={row.definition.length} max={MAX_CARD_DEFINITION_CHARS} />
+				</div>
 				<textarea
 					id="row-def-{i}"
 					bind:value={row.definition}
+					maxlength={MAX_CARD_DEFINITION_CHARS}
 					rows="1"
 					use:autoresize={row.definition}
 					placeholder="Enter definition"

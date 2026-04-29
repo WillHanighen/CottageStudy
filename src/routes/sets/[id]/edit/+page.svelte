@@ -1,12 +1,33 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import CardRowsEditor from '$lib/components/CardRowsEditor.svelte';
+	import CharBudgetLabel from '$lib/components/CharBudgetLabel.svelte';
 	import Seo from '$lib/components/Seo.svelte';
+	import {
+		MAX_SET_DESCRIPTION_CHARS,
+		MAX_SET_TITLE_CHARS
+	} from '$lib/notecardLimits';
 	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
 	let saving = $state(false);
+
+	// svelte-ignore state_referenced_locally
+	let titleEdit = $state(data.set.title);
+	// svelte-ignore state_referenced_locally
+	let descriptionEdit = $state(data.set.description);
+	// svelte-ignore state_referenced_locally
+	let syncedSetId = $state(data.set.id);
+
+	$effect(() => {
+		if (syncedSetId !== data.set.id) {
+			titleEdit = data.set.title;
+			descriptionEdit = data.set.description;
+			syncedSetId = data.set.id;
+		}
+	});
+
 	// svelte-ignore state_referenced_locally
 	let rows = $state(
 		// svelte-ignore state_referenced_locally
@@ -59,38 +80,63 @@
 		>
 			<div class="grain space-y-5 rounded-2xl border border-zinc-800/60 bg-zinc-900/40 p-6 backdrop-blur-sm sm:p-8">
 				<div>
-					<label class="mb-2 block font-mono text-[10px] tracking-widest text-zinc-500 uppercase" for="title">Title</label>
+					<div class="mb-2 flex items-end justify-between gap-3">
+						<label
+							class="block font-mono text-[10px] tracking-widest text-zinc-500 uppercase"
+							for="title"
+							>Title</label
+						>
+						<CharBudgetLabel length={titleEdit.length} max={MAX_SET_TITLE_CHARS} />
+					</div>
 					<input
 						id="title"
 						name="title"
 						type="text"
 						required
-						maxlength="200"
-						value={data.set.title}
+						maxlength={MAX_SET_TITLE_CHARS}
+						bind:value={titleEdit}
 						class="block w-full rounded-lg border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-lg text-white transition-colors focus:border-orange-500"
 					/>
 				</div>
 				<div>
-					<label class="mb-2 block font-mono text-[10px] tracking-widest text-zinc-500 uppercase" for="description">Description</label>
+					<div class="mb-2 flex items-end justify-between gap-3">
+						<label class="block font-mono text-[10px] tracking-widest text-zinc-500 uppercase" for="description"
+							>Description</label
+						>
+						<CharBudgetLabel length={descriptionEdit.length} max={MAX_SET_DESCRIPTION_CHARS} />
+					</div>
 					<textarea
 						id="description"
 						name="description"
 						rows="2"
+						maxlength={MAX_SET_DESCRIPTION_CHARS}
+						bind:value={descriptionEdit}
 						class="block w-full resize-y rounded-lg border border-zinc-800 bg-zinc-950/60 px-4 py-3 text-sm text-white transition-colors focus:border-orange-500"
-					>{data.set.description}</textarea>
+					></textarea>
 				</div>
-				<label class="flex cursor-pointer items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 px-4 py-3">
+				<label
+					class="flex cursor-pointer items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-950/60 px-4 py-3"
+					class:opacity-60={data.set.public_locked === 1}
+					class:pointer-events-none={data.set.public_locked === 1}
+				>
 					<input
 						type="checkbox"
 						name="is_public"
 						checked={data.set.is_public === 1}
-						class="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-orange-500 focus:ring-orange-500"
+						disabled={data.set.public_locked === 1}
+						class="h-4 w-4 rounded border-zinc-700 bg-zinc-900 text-orange-500 focus:ring-orange-500 disabled:cursor-not-allowed"
 					/>
 					<span class="text-sm">
 						<span class="text-white">Public</span>
 						<span class="block text-xs text-zinc-500">Anyone with the link can view this set.</span>
 					</span>
 				</label>
+				{#if data.set.public_locked === 1}
+					<p class="text-xs text-amber-400/90">
+						This set was removed from public search after multiple community reports. It cannot be made
+						public again.
+					</p>
+				{/if}
 			</div>
 
 			<div>

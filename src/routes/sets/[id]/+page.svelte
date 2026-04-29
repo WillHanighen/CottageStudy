@@ -1,13 +1,17 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import type { PageData } from './$types';
+	import { page } from '$app/state';
+	import type { ActionData, PageData } from './$types';
 	import Seo from '$lib/components/Seo.svelte';
 	import { SITE_NAME, SITE_URL } from '$lib/seo';
 
-	let { data }: { data: PageData } = $props();
+	let { data, form }: { data: PageData; form?: ActionData } = $props();
 	const set = $derived(data.set);
 
 	let confirmingDelete = $state(false);
+	let confirmingReport = $state(false);
+
+	const reportedThanks = $derived(page.url.searchParams.get('reported') === '1');
 
 	function clip(text: string, max = 160): string {
 		const t = text.replace(/\s+/g, ' ').trim();
@@ -91,6 +95,69 @@
 			<h1 class="text-4xl font-semibold tracking-tight text-white sm:text-5xl">{set.title}</h1>
 			{#if set.description}
 				<p class="mt-3 max-w-2xl text-lg text-zinc-400">{set.description}</p>
+			{/if}
+
+			{#if isPublic && !data.isOwner}
+				<div class="mt-6 flex flex-wrap items-center gap-3">
+					{#if reportedThanks}
+						<p class="text-sm text-emerald-400/90" role="status">Thanks — your report was recorded.</p>
+					{:else if !data.isAuthenticated}
+						<a
+							href={`/sign-in?redirect=/sets/${set.id}`}
+							class="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-zinc-900/80 px-4 py-2 text-sm font-medium text-zinc-300 transition hover:border-zinc-600 hover:bg-zinc-800"
+						>
+							<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+								<path d="M12 9v3.5M12 17h.01" stroke-linecap="round" />
+								<circle cx="12" cy="12" r="9" />
+							</svg>
+							Sign in to report
+						</a>
+					{:else if data.hasReported}
+						<p class="text-sm text-zinc-500">You reported this set.</p>
+					{:else if !confirmingReport}
+						<button
+							type="button"
+							onclick={() => (confirmingReport = true)}
+							class="inline-flex items-center gap-2 rounded-lg border border-zinc-700 bg-transparent px-4 py-2 text-sm font-medium text-zinc-400 transition hover:border-red-500/40 hover:bg-red-500/5 hover:text-red-300"
+						>
+							<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+								<path d="M12 9v3.5M12 17h.01" stroke-linecap="round" />
+								<circle cx="12" cy="12" r="9" />
+							</svg>
+							Report
+						</button>
+					{:else}
+						<form
+							method="POST"
+							action="?/report"
+							use:enhance={() => {
+								return async ({ update }) => {
+									await update();
+									confirmingReport = false;
+								};
+							}}
+							class="flex flex-wrap items-center gap-2"
+						>
+							<span class="text-sm text-zinc-400">Report this set as inappropriate?</span>
+							<button
+								type="submit"
+								class="rounded-lg bg-red-500/90 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-red-600"
+							>
+								Submit report
+							</button>
+							<button
+								type="button"
+								onclick={() => (confirmingReport = false)}
+								class="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-1.5 text-sm font-medium text-zinc-300 transition hover:bg-zinc-800"
+							>
+								Cancel
+							</button>
+						</form>
+					{/if}
+					{#if form?.reportError}
+						<p class="text-sm text-red-400">{form.reportError}</p>
+					{/if}
+				</div>
 			{/if}
 		</div>
 
