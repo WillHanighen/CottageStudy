@@ -31,8 +31,14 @@ bun run dev                # http://localhost:5173
 - **Public set discovery** at `/explore` (anyone can browse sets marked public).
 - **Set editor** with a JS-driven row editor that round-trips a JSON cards
   payload through a hidden form field on submit.
+- **Portable export** (`cottage-study/v1` JSON) from `/sets/[id]` for public
+  sets or your own decks — usable for backup or moving between workspaces.
 - **Four study modes** per set, each at its own route. See
   [`docs/study-modes.md`](./docs/study-modes.md).
+- **Optional AI-assisted drafts** when creating a set (`/sets/new`): paste a
+  study guide, choose a model, and supply your own [OpenRouter](https://openrouter.ai/)
+  API key. The client encrypts the key to the server for that request only
+  (bring-your-own-key); nothing is stored — see [`docs/architecture.md`](./docs/architecture.md#ai-assisted-card-generation-byok)).
 - **Drop-in graceful auth**. If Clerk keys are missing the app boots without
   auth and the protected routes simply 303 to `/sign-in` — useful for first-run
   smoke tests.
@@ -41,7 +47,7 @@ bun run dev                # http://localhost:5173
 
 | Topic                                            | What's inside                                                                                  |
 | ------------------------------------------------ | ---------------------------------------------------------------------------------------------- |
-| [Architecture](./docs/architecture.md)           | System overview, data model, request lifecycle, auth + Turnstile flow, file map                |
+| [Architecture](./docs/architecture.md)           | System overview, data model, request lifecycle, auth + Turnstile flow, AI BYOK path, file map |
 | [Study modes](./docs/study-modes.md)             | Behavior, controls, and internals for Flashcards / Learn / Quiz / Match                        |
 | [Development](./docs/development.md)             | Local setup, scripts, env vars, common tasks, debugging the auth dev loop                      |
 | [Deployment](./docs/deployment.md)               | Bun runtime, SQLite persistence, public env baking, ops checklist                              |

@@ -48,11 +48,17 @@ PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_... \
 CLERK_SECRET_KEY=sk_live_... \
 PUBLIC_TURNSTILE_SITE_KEY=0x4AA... \
 TURNSTILE_SECRET_KEY=0x4AA... \
+PUBLIC_SITE_URL=https://study.cottageindustries.xyz \
 bun run start
 ```
 
 `PUBLIC_*` keys must be in the environment of `bun run build` to make it into
-the client bundle. Server-only keys only need to be present at runtime.
+the client bundle (`PUBLIC_SITE_URL` drives canonical/meta defaults and the
+[`$lib/seo`](../src/lib/seo.ts) resolver). Server-only keys only need to be present at runtime.
+
+There is **no server-side OpenRouter API key**. AI-assisted drafts use the
+visitor’s BYOK key per request (`/api/ai/generate-cards`); attribution headers
+reuse `PUBLIC_SITE_URL`/`SITE_URL` as in local development.
 
 ### Example systemd unit
 
@@ -103,6 +109,7 @@ Before promoting to prod the first time:
 - [ ] Turnstile widget hostnames include the public domain.
 - [ ] Clerk redirect allowlist includes `https://<your-domain>/sign-in/sso-callback`.
 - [ ] `ORIGIN` matches the public URL exactly (scheme + host, no trailing slash).
+- [ ] `PUBLIC_SITE_URL` aligns with the production origin (canonical/OG/sitemap; optional but recommended).
 - [ ] `DB_PATH` points at persistent storage; the directory exists and is
       writable by the service user.
 - [ ] `NODE_ENV=production` is set (this is what makes `/reset` 404 and what

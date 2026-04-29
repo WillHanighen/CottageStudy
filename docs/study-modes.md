@@ -16,6 +16,10 @@ the deck is empty.
 The set hub at `/sets/[id]` lays them out as a 4-up grid and disables modes
 whose minimum-cards requirement isn't met.
 
+**Creating a set**: hand-author cards under **`/sets/new`**, or open the AI
+assist flow there to paste a study guide — it calls OpenRouter with **your own**
+API key (encrypted when sent to the server; see [Architecture → AI BYOK](./architecture.md#ai-assisted-card-generation-byok)).
+
 ## Flashcards
 
 [`src/routes/sets/[id]/study/+page.svelte`](../src/routes/sets/[id]/study/+page.svelte)

@@ -15,33 +15,50 @@ following a request through the system.
 src/
 ├── app.css                    Tailwind theme, font registration, custom keyframes (.grain, .rise-in)
 ├── app.html                   Document shell + Geist / Fraunces font preconnects
-├── app.d.ts                   App.Locals shape
+├── app.d.ts                   App.Locals shape (Clerk auth as callable vs object — see comments)
 ├── hooks.server.ts            Clerk handler + protected-route gate + initDb()
 ├── lib/
-│   ├── clerk.ts                  Stub re-exports for components that import from svelte-clerk
+│   ├── seo.ts                 Site name/tagline, OG/Twitter helpers, SITE_URL (`PUBLIC_SITE_URL`)
+│   ├── clerk.ts               Stub re-exports for components that import from svelte-clerk
+│   ├── ai/                    Client-side only (safe for the browser bundle)
+│   │   ├── byok.ts            Types/constants for BYOK payloads to `/api/ai/generate-cards`
+│   │   └── encrypt.ts         Hybrid RSA-OAEP (server pubkey from `/api/ai/pubkey`) + AES-GCM envelope
 │   ├── components/
+│   │   ├── AiGenerateModal.svelte BYOK wizard on /sets/new (paste guide + model + encrypted key)
 │   │   ├── Background.svelte     Fixed grid pattern + radial blur orbs + vignette
 │   │   ├── CardRowsEditor.svelte Reactive rows editor used by /sets/new and /sets/[id]/edit
 │   │   ├── Footer.svelte
 │   │   ├── Header.svelte         Top nav with conditional Clerk session menu
+│   │   ├── Seo.svelte           Meta/canonical/json-ld wrapper (consumes `$lib/seo`)
 │   │   └── SignInProviders.svelte OAuth buttons gated on a Turnstile token
 │   └── server/
+│       ├── ai/
+│       │   ├── keypair.ts        Ephemeral per-process RSA-2048; decrypt AES-wrapped BYOK payloads
+│       │   └── openrouter.ts     `generateCardsFromGuide` → OpenRouter chat completions (JSON schema)
 │       ├── auth.ts               getAuth(locals) helper that tolerates svelte-clerk's runtime shape
 │       ├── db.ts                 bun:sqlite handle, schema bootstrap, query catalogue
-│       └── turnstile.ts          POST to challenges.cloudflare.com/turnstile/v0/siteverify
+│       └── turnstile.ts         POST to challenges.cloudflare.com/turnstile/v0/siteverify
 └── routes/
     ├── +layout.{svelte,server.ts}        ClerkProvider wrapper, SSR initial state via buildClerkProps
     ├── +page.svelte                       Marketing landing page
-    ├── api/turnstile/verify/+server.ts    POST endpoint called by SignInProviders before OAuth
+    ├── manifest.webmanifest/+server.ts   Web App Manifest (`prerender: true`, icons/theme from `$lib/seo`)
+    ├── api/
+    │   ├── ai/
+    │   │   ├── pubkey/+server.ts           GET RSA public JWK for client-side encryption (auth required)
+    │   │   └── generate-cards/+server.ts   POST decrypted BYOK envelope → OpenRouter; rate-limited
+    │   └── turnstile/verify/+server.ts    POST endpoint called by SignInProviders before OAuth
+    ├── robots.txt/+server.ts              Crawler rules
     ├── reset/+server.ts                   Dev-only cookie nuker for sign-in loops (404s in prod)
     ├── sign-in/                           Custom sign-in screen + OAuth callback handler
+    ├── sitemap.xml/+server.ts             Lists static routes + public sets (uses `queries` + `$lib/seo`)
     ├── dashboard/                         Authenticated set library
-    ├── explore/                           Public sets feed
+    ├── explore/                           Public sets feed (queries SQLite inline for search/filter)
     └── sets/
-        ├── new/                           Create a set + initial cards
+        ├── new/                           Create a set + initial cards (+ optional AiGenerateModal)
         └── [id]/
             ├── +page.{svelte,server.ts}   Set hub: mode picker + card list + delete action
             ├── edit/                       Edit metadata + cards
+            ├── export/+server.ts           GET JSON download (`cottage-study/v1`); visibility same as viewer
             ├── study/                      Flashcards mode
             ├── learn/                      Adaptive learn mode
             ├── quiz/                       Graded test mode
@@ -173,6 +190,23 @@ an error.
 cookie for the origin. It's there to break Clerk session loops when you've
 been swapping between dev tenants — and it 404s when `NODE_ENV=production`.
 
+## AI-assisted card generation (BYOK)
+
+Authenticated users can draft cards from pasted study guides on **`/sets/new`**
+via **bring-your-own-key** OpenRouter access. CottageStudy never stores API
+credentials: the user's key is bundled with the guide JSON, encrypted client-side
+(`$lib/ai/encrypt.ts`) with an ephemeral RSA-OAEP-2048 public key from **`GET /api/ai/pubkey`**,
+then posted to **`POST /api/ai/generate-cards`**. The server holds the matching
+private key only in memory for the lifetime of the process (regenerated at
+startup), decrypts (`$lib/server/ai/keypair.ts`), forwards the plaintext key in
+memory to OpenRouter (`$lib/server/ai/openrouter.ts`), and replies with `{ title?, cards[] }`
+or `{ status: needs_more_info, reason }`. Per-user rate limiting applies to
+successful route handling (see `RATE_LIMIT_*` in the endpoint).
+
+There is no `OPENROUTER_*` secret in `.env`; the product model is purely BYOK.
+[`$lib/seo`](../src/lib/seo.ts) exposes `SITE_URL` (built from optional `PUBLIC_SITE_URL`) sent as `http-referer` /
+`x-title` per OpenRouter’s attribution headers.
+
 ## Layout + styling
 
 `+layout.svelte` wraps the entire app in `<ClerkProvider>` (when configured)
@@ -190,10 +224,11 @@ animations / utilities are notable:
   `backface-visibility: hidden` on inner faces. See
   [study modes](./study-modes.md#flashcards) for the gory bits.
 
-## Why no separate API
+## Why no broad REST layer
 
-Every read goes through a `+page.server.ts` loader; every write goes through
-an `actions` handler or the one Turnstile endpoint. Adding REST or tRPC would
-introduce a second source of truth for shapes and auth. As long as everything
-is co-located with the page that consumes it, the schema is the source of
-truth and TypeScript can flow types end-to-end.
+Page data flows through `+page.server.ts` loaders; mutations favour SvelteKit
+`actions`. Thin JSON routes exist where a page action is awkward — Turnstile
+verification, **`/api/ai/*`** BYOK decryption + proxy — but they intentionally
+mirror the adjacent UI and reuse the same `getAuth`-style gate. Keeping the
+SQLite `queries` object as the backbone avoids a sprawling parallel API surface;
+the BYOK endpoints never persist third-party payloads beyond decrypt-in-flight.

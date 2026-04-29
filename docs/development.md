@@ -17,8 +17,8 @@ common tasks, and the rough edges that have caught me before.
 ## First-time setup
 
 ```bash
-git clone <repo>
-cd study
+git clone <repo-url>
+cd <checkout-directory>
 bun install
 cp .env.example .env
 # edit .env (see below)
@@ -36,6 +36,7 @@ Source: [`.env.example`](../.env.example). Loaded by SvelteKit via
 
 | Variable                       | Required          | Where it's read                                                        | Notes                                                                     |
 | ------------------------------ | ----------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `PUBLIC_SITE_URL`              | recommended       | [`lib/seo.ts`](../src/lib/seo.ts), [`server/ai/openrouter.ts`](../src/lib/server/ai/openrouter.ts) | Public origin for canonical/OG/meta and `sitemap.xml`. Fallback when unset: `https://study.cottageindustries.xyz`. OpenRouter attribution headers (`http-referer`, `x-title`) on `/api/ai/generate-cards`. |
 | `PUBLIC_CLERK_PUBLISHABLE_KEY` | for auth          | `+layout.server.ts`, `hooks.server.ts`                                 | Format `pk_(test\|live)_<base64>`. Baked into the client bundle at build. |
 | `CLERK_SECRET_KEY`             | for auth          | `hooks.server.ts`, `+layout.server.ts`                                 | Format `sk_(test\|live)_<base64>`. Server-only.                           |
 | `PUBLIC_TURNSTILE_SITE_KEY`    | for sign-in       | `SignInProviders.svelte`                                               | Public, baked into the client bundle.                                     |
@@ -94,12 +95,16 @@ typecheck guardrail.
   `db.query(...)` inside a `+page.server.ts`, hoist it into the `queries`
   object. The one exception so far is `/explore` because the read is
   uncorrelated with any user.
+- **BYOK AI (`$lib/ai`, `$lib/server/ai`).** No hosted OpenRouter key in `.env`:
+  `/sets/new` sends an encrypted envelope; the server only decrypts in memory
+  and proxies to OpenRouter. See [Architecture → AI-assisted card generation](./architecture.md#ai-assisted-card-generation-byok).
 - **Auth checks happen in the loader.** Don't lean on `hooks.server.ts`
   alone — it only covers `/dashboard` and `/sets`, and the resource-level
   rules (set ownership, public visibility) need per-route knowledge.
-- **Forms use SvelteKit actions, not `fetch`.** All mutations
-  (`/sets/new`, `/sets/[id]/edit`, set delete) are progressive-enhanced
-  forms. The cards array round-trips as JSON in a hidden field — see
+- **Forms use SvelteKit actions, not `fetch`.** Mutations (`/sets/new`,
+  `/sets/[id]/edit`, set delete) are progressive-enhanced forms; optional AI
+  draft fills the same rows via `fetch('/api/ai/...')` next to them. Cards
+  round-trip as JSON in a hidden field — see
   [`CardRowsEditor.svelte`](../src/lib/components/CardRowsEditor.svelte).
 - **No emojis in source or copy.** Visual emphasis is the job of typography
   (Fraunces italic) and color (orange accent), not unicode glyphs.
@@ -194,6 +199,19 @@ fallen into a session loop — visit `/reset` to clear cookies.
 design. If you're seeing it for non-route files, restart `bun run dev`; in my
 experience Tailwind v4's plugin occasionally loses track of theme changes
 after large edits.
+
+### "AI draft fails with upstream `auth` or HTTP 401"
+
+The generate endpoint runs with whatever OpenRouter key you paste in the modal.
+Upstream rejections usually mean an invalid/expired key, typo, or a key whose
+plan cannot call the chosen model — create or verify keys at
+[openrouter.ai/keys](https://openrouter.ai/keys). The app never stores keys;
+you paste each browser session.
+
+### "AI draft returns decrypt_failed"
+
+The server RSA keypair rotates whenever the Node/Bun process restarts. Reload
+`/sets/new` so the modal pulls **`GET /api/ai/pubkey`** fresh before encrypting again.
 
 ## Code style
 

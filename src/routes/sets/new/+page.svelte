@@ -2,6 +2,7 @@
 	import { enhance } from '$app/forms';
 	import CardRowsEditor from '$lib/components/CardRowsEditor.svelte';
 	import Seo from '$lib/components/Seo.svelte';
+	import AiGenerateModal from '$lib/components/AiGenerateModal.svelte';
 	import type { ActionData } from './$types';
 
 	let { form }: { form: ActionData } = $props();
@@ -24,6 +25,19 @@
 
 	let importStatus = $state<{ kind: 'ok' | 'error'; message: string } | null>(null);
 	let importInput: HTMLInputElement | undefined = $state();
+	let aiOpen = $state(false);
+
+	function onAiResult(payload: { title: string; cards: Array<{ term: string; definition: string }> }) {
+		const generated = payload.cards.filter((c) => c.term.trim() || c.definition.trim());
+		if (!title.trim() && payload.title.trim()) {
+			title = payload.title.slice(0, 200);
+		}
+		rows = generated.length > 0 ? generated : [{ term: '', definition: '' }];
+		importStatus = {
+			kind: 'ok',
+			message: `Generated ${generated.length} ${generated.length === 1 ? 'card' : 'cards'} — review before saving.`
+		};
+	}
 
 	type ImportShape = {
 		title?: unknown;
@@ -108,7 +122,7 @@
 						study set
 					</span>
 				</h1>
-				<div class="flex items-center gap-2">
+				<div class="flex flex-wrap items-center gap-2">
 					<input
 						bind:this={importInput}
 						type="file"
@@ -116,6 +130,27 @@
 						onchange={onImport}
 						class="sr-only"
 					/>
+					<button
+						type="button"
+						onclick={() => (aiOpen = true)}
+						class="group inline-flex items-center gap-2 rounded-lg border border-orange-500/40 bg-linear-to-br from-orange-500/15 via-orange-500/5 to-transparent px-4 py-2 text-sm font-medium text-orange-200 transition hover:border-orange-400 hover:from-orange-500/25 hover:text-orange-100"
+					>
+						<svg
+							class="h-4 w-4 text-orange-300 transition group-hover:text-orange-200"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="1.8"
+						>
+							<path
+								d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3z"
+								stroke-linecap="round"
+								stroke-linejoin="round"
+							/>
+							<path d="M19 14l.7 1.9L21.5 17l-1.8.6L19 19l-.7-1.4L16.5 17l1.8-1.1L19 14z" stroke-linecap="round" stroke-linejoin="round" />
+						</svg>
+						Generate with AI
+					</button>
 					<button
 						type="button"
 						onclick={() => importInput?.click()}
@@ -262,3 +297,5 @@
 		</form>
 	</div>
 </section>
+
+<AiGenerateModal bind:open={aiOpen} onResult={onAiResult} />

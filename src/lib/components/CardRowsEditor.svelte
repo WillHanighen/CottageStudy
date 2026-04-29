@@ -26,9 +26,17 @@
 		rows = copy;
 	}
 
-	function autoresize(el: HTMLTextAreaElement) {
-		el.style.height = 'auto';
-		el.style.height = el.scrollHeight + 'px';
+	function autoresize(node: HTMLTextAreaElement, _value: string) {
+		const resize = () => {
+			node.style.height = 'auto';
+			node.style.height = node.scrollHeight + 'px';
+		};
+		queueMicrotask(resize);
+		return {
+			update(_v: string) {
+				resize();
+			}
+		};
 	}
 </script>
 
@@ -79,7 +87,7 @@
 					data-row-term
 					bind:value={row.term}
 					rows="1"
-					oninput={(e) => autoresize(e.currentTarget)}
+					use:autoresize={row.term}
 					placeholder="Enter term"
 					class="block w-full resize-none border-0 bg-transparent p-0 text-base text-white placeholder:text-zinc-700 focus:ring-0 focus:outline-none"
 				></textarea>
@@ -102,7 +110,7 @@
 					id="row-def-{i}"
 					bind:value={row.definition}
 					rows="1"
-					oninput={(e) => autoresize(e.currentTarget)}
+					use:autoresize={row.definition}
 					placeholder="Enter definition"
 					class="block w-full resize-none border-0 bg-transparent p-0 text-base text-white placeholder:text-zinc-700 focus:ring-0 focus:outline-none"
 				></textarea>
