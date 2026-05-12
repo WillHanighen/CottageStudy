@@ -99,25 +99,59 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		);
 	}
 
-	try {
-		const result = await generateCardsFromGuide({
-			apiKey,
-			guide,
-			model,
-			referer: SITE_URL,
-			title: SITE_NAME
-		});
-		return json({ ok: true, result });
-	} catch (err) {
-		if (err instanceof OpenRouterRequestError) {
-			return json(
-				{
-					error: err.kind,
-					message: err.message
-				},
-				{ status: err.kind === 'auth' ? 401 : err.kind === 'rate_limit' ? 429 : 502 }
-			);
+	const encoder = new TextEncoder();
+	const sse = (event: string, data: string) =>
+		encoder.encode(`event: ${event}\ndata: ${data}\n\n`);
+
+	/**
+	 * Cloudflare (and similar proxies) time out origins that send no bytes for ~100s (524).
+	 * OpenRouter can exceed that on large guides. Stream SSE with immediate headers + periodic
+	 * comment pings so the tunnel stays alive until the model responds.
+	 */
+	const stream = new ReadableStream({
+		async start(controller) {
+			const pingMs = 15_000;
+			controller.enqueue(encoder.encode(': connected\n\n'));
+			const pingInterval = setInterval(() => {
+				controller.enqueue(encoder.encode(': ping\n\n'));
+			}, pingMs);
+
+			try {
+				const result = await generateCardsFromGuide({
+					apiKey,
+					guide,
+					model,
+					referer: SITE_URL,
+					title: SITE_NAME
+				});
+				controller.enqueue(sse('result', JSON.stringify({ ok: true, result })));
+			} catch (err) {
+				if (err instanceof OpenRouterRequestError) {
+					controller.enqueue(
+						sse(
+							'error',
+							JSON.stringify({
+								error: err.kind,
+								message: err.message
+							})
+						)
+					);
+				} else {
+					controller.enqueue(sse('error', JSON.stringify({ error: 'unknown' })));
+				}
+			} finally {
+				clearInterval(pingInterval);
+				controller.close();
+			}
 		}
-		return json({ error: 'unknown' }, { status: 500 });
-	}
+	});
+
+	return new Response(stream, {
+		headers: {
+			'content-type': 'text/event-stream; charset=utf-8',
+			'cache-control': 'no-store',
+			// Helps reverse proxies forward chunks promptly (nginx etc.)
+			'x-accel-buffering': 'no'
+		}
+	});
 };

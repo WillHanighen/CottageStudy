@@ -87,8 +87,69 @@
 			if (err.message === 'pubkey_missing' || err.message.startsWith('pubkey_fetch_failed')) {
 				return 'Could not fetch the server public key. Are you signed in?';
 			}
+			if (err.message === 'generate_stream_incomplete') {
+				return 'The connection closed before generation finished. If your notes are very long, try a shorter section or split them—some proxies time out silent connections.';
+			}
 		}
 		return 'Something went wrong. Please try again.';
+	}
+
+	function mapJsonErrorBody(j: { error?: string; message?: string }): string {
+		if (j?.error === 'auth') return 'OpenRouter rejected the API key.';
+		if (j?.error === 'rate_limit') return 'Too many requests — slow down a bit.';
+		if (j?.error === 'rate_limited') return 'You are generating too quickly. Please wait a minute.';
+		if (j?.error === 'guide_too_long')
+			return `Study guide is too long (max ${MAX_GUIDE_CHARS.toLocaleString()} chars).`;
+		if (j?.error === 'unauthorized') return 'Please sign in again.';
+		if (j?.message) return j.message;
+		return 'Something went wrong. Please try again.';
+	}
+
+	/** Server streams SSE after validation so Cloudflare/proxies see bytes during long model calls. */
+	async function readGenerateCardsSse(res: Response): Promise<GenerateResult> {
+		const reader = res.body?.getReader();
+		if (!reader) throw new Error('generate_stream_incomplete');
+
+		const decoder = new TextDecoder();
+		let buffer = '';
+
+		while (true) {
+			const { done, value } = await reader.read();
+			if (value) buffer += decoder.decode(value, { stream: true });
+
+			let sep: number;
+			while ((sep = buffer.indexOf('\n\n')) !== -1) {
+				const block = buffer.slice(0, sep);
+				buffer = buffer.slice(sep + 2);
+				if (!block.trim()) continue;
+
+				let eventName = 'message';
+				const dataLines: string[] = [];
+				for (const line of block.split('\n')) {
+					if (line.startsWith(':')) continue;
+					if (line.startsWith('event:')) eventName = line.slice(6).trim();
+					else if (line.startsWith('data:'))
+						dataLines.push(line.startsWith('data: ') ? line.slice(6) : line.slice(5));
+				}
+				const dataStr = dataLines.join('\n').trim();
+				if (!dataStr) continue;
+
+				if (eventName === 'result') {
+					const parsed = JSON.parse(dataStr) as { ok?: boolean; result?: GenerateResult };
+					const result = parsed?.result;
+					if (!result) throw new Error('generate_stream_incomplete');
+					return result;
+				}
+				if (eventName === 'error') {
+					const j = JSON.parse(dataStr) as { error?: string; message?: string };
+					throw new Error(mapJsonErrorBody(j));
+				}
+			}
+
+			if (done) break;
+		}
+
+		throw new Error('generate_stream_incomplete');
 	}
 
 	async function generate() {
@@ -134,28 +195,42 @@
 				body: JSON.stringify(envelope)
 			});
 
-			if (!res.ok) {
+			const ct = res.headers.get('content-type') ?? '';
+			let result: GenerateResult;
+
+			if (ct.includes('text/event-stream')) {
+				if (!res.ok) {
+					errorMessage = `Server error (${res.status}).`;
+					return;
+				}
+				try {
+					result = await readGenerateCardsSse(res);
+				} catch (streamErr) {
+					errorMessage =
+						streamErr instanceof Error ? streamErr.message : describeError(streamErr);
+					return;
+				}
+			} else if (!res.ok) {
 				let serverError = `Server error (${res.status}).`;
 				try {
 					const j = (await res.json()) as { error?: string; message?: string };
-					if (j?.error === 'auth') serverError = 'OpenRouter rejected the API key.';
-					else if (j?.error === 'rate_limit') serverError = 'Too many requests — slow down a bit.';
-					else if (j?.error === 'rate_limited') serverError = 'You are generating too quickly. Please wait a minute.';
-					else if (j?.error === 'guide_too_long') serverError = `Study guide is too long (max ${MAX_GUIDE_CHARS.toLocaleString()} chars).`;
-					else if (j?.error === 'unauthorized') serverError = 'Please sign in again.';
-					else if (j?.message) serverError = j.message;
+					serverError = mapJsonErrorBody(j);
 				} catch {
-					// ignore
+					if (res.status === 524) {
+						serverError =
+							'Timed out at Cloudflare (524). Try a shorter passage or split your notes.';
+					}
 				}
 				errorMessage = serverError;
 				return;
-			}
-
-			const body = (await res.json()) as { ok?: boolean; result?: GenerateResult };
-			const result = body?.result;
-			if (!result) {
-				errorMessage = 'Empty response from server.';
-				return;
+			} else {
+				const body = (await res.json()) as { ok?: boolean; result?: GenerateResult };
+				const r = body?.result;
+				if (!r) {
+					errorMessage = 'Empty response from server.';
+					return;
+				}
+				result = r;
 			}
 
 			if (result.status === 'needs_more_info') {
