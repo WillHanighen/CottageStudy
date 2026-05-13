@@ -51,6 +51,9 @@
 
 	type SingleType = 'mc' | 'tf' | 'written';
 
+	/** Relative frequency when mixing single-question types: 3 MC : 2 written : 1 T/F. */
+	const SINGLE_TYPE_WEIGHT: Record<SingleType, number> = { mc: 3, written: 2, tf: 1 };
+
 	function shuffle<T>(arr: T[]): T[] {
 		const a = arr.slice();
 		for (let i = a.length - 1; i > 0; i--) {
@@ -170,7 +173,15 @@
 			// Defensive — caller guards against this. Default to written.
 			return 'written';
 		}
-		return enabled[Math.floor(Math.random() * enabled.length)];
+		if (enabled.length === 1) return enabled[0];
+		let total = 0;
+		for (const t of enabled) total += SINGLE_TYPE_WEIGHT[t];
+		let r = Math.random() * total;
+		for (const t of enabled) {
+			r -= SINGLE_TYPE_WEIGHT[t];
+			if (r < 0) return t;
+		}
+		return enabled[enabled.length - 1];
 	}
 
 	function generate() {

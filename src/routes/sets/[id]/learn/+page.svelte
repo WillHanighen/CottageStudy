@@ -9,6 +9,9 @@
 	type Card = (typeof data.set.cards)[number];
 	type LearnKind = 'mc' | 'written' | 'tf';
 
+	/** Relative frequency when mixing modes: 3 MC : 2 written : 1 T/F. */
+	const LEARN_KIND_WEIGHT: Record<LearnKind, number> = { mc: 3, written: 2, tf: 1 };
+
 	function shuffle<T>(arr: T[]): T[] {
 		const a = arr.slice();
 		for (let i = a.length - 1; i > 0; i--) {
@@ -135,7 +138,15 @@
 	function pickLearnKind(): LearnKind {
 		const pool = learnKindPool;
 		if (pool.length === 0) return 'written';
-		return pool[Math.floor(Math.random() * pool.length)];
+		if (pool.length === 1) return pool[0];
+		let total = 0;
+		for (const k of pool) total += LEARN_KIND_WEIGHT[k];
+		let r = Math.random() * total;
+		for (const k of pool) {
+			r -= LEARN_KIND_WEIGHT[k];
+			if (r < 0) return k;
+		}
+		return pool[pool.length - 1];
 	}
 
 	function resetRun() {
