@@ -1,6 +1,9 @@
 import { Database } from 'bun:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import type { CardRow } from '$lib/cardRow';
+import { normalizeDistractorList, parseMcDistractorsJson, type McDistractors } from '$lib/mcDistractors';
+import { MAX_CARD_DEFINITION_CHARS, MAX_CARD_TERM_CHARS } from '$lib/notecardLimits';
 import { assertCardsLimits, assertSetLimits } from '$lib/server/notecardValidation';
 
 const DB_PATH = process.env.DB_PATH ?? './data/study.db';
@@ -57,6 +60,27 @@ export function initDb(): void {
 	if (!hasPublicLocked) {
 		db.exec(`ALTER TABLE sets ADD COLUMN public_locked INTEGER NOT NULL DEFAULT 0`);
 	}
+
+	const hasMcDistractors = db
+		.query<{ n: number }, []>(
+			`SELECT COUNT(*) AS n FROM pragma_table_info('cards') WHERE name = 'mc_distractors'`
+		)
+		.get()?.n;
+	if (!hasMcDistractors) {
+		db.exec(`ALTER TABLE cards ADD COLUMN mc_distractors TEXT`);
+	}
+}
+
+function packMcDistractorsRow(term: string, def: string, row: CardRow): string | null {
+	const incorrect_definitions = normalizeDistractorList(
+		row.incorrect_definitions ?? [],
+		def,
+		3,
+		MAX_CARD_DEFINITION_CHARS
+	);
+	const incorrect_terms = normalizeDistractorList(row.incorrect_terms ?? [], term, 3, MAX_CARD_TERM_CHARS);
+	if (incorrect_definitions.length === 0 && incorrect_terms.length === 0) return null;
+	return JSON.stringify({ incorrect_definitions, incorrect_terms });
 }
 
 export type StudySet = {
@@ -77,6 +101,7 @@ export type Card = {
 	definition: string;
 	position: number;
 	created_at: number;
+	mc_distractors: McDistractors | null;
 };
 
 export type StudySetWithCount = StudySet & { card_count: number };
@@ -120,11 +145,16 @@ export const queries = {
 	getSetWithCards(setId: string): StudySetWithCards | null {
 		const set = queries.getSet(setId);
 		if (!set) return null;
-		const cards = db
-			.query<Card, [string]>(
-				`SELECT * FROM cards WHERE set_id = ? ORDER BY position ASC, created_at ASC`
-			)
+		const rows = db
+			.query<
+				Omit<Card, 'mc_distractors'> & { mc_distractors: string | null },
+				[string]
+			>(`SELECT * FROM cards WHERE set_id = ? ORDER BY position ASC, created_at ASC`)
 			.all(setId);
+		const cards: Card[] = rows.map((r) => ({
+			...r,
+			mc_distractors: parseMcDistractorsJson(r.mc_distractors)
+		}));
 		return { ...set, cards };
 	},
 
@@ -221,19 +251,20 @@ export const queries = {
 		return result.changes > 0;
 	},
 
-	replaceCards(setId: string, cards: Array<{ term: string; definition: string }>): void {
+	replaceCards(setId: string, cards: CardRow[]): void {
 		assertCardsLimits(cards);
-		const tx = db.transaction((items: Array<{ term: string; definition: string }>) => {
+		const tx = db.transaction((items: CardRow[]) => {
 			db.run(`DELETE FROM cards WHERE set_id = ?`, [setId]);
 			const insert = db.prepare(
-				`INSERT INTO cards (id, set_id, term, definition, position, created_at)
-				 VALUES (?, ?, ?, ?, ?, ?)`
+				`INSERT INTO cards (id, set_id, term, definition, position, created_at, mc_distractors)
+				 VALUES (?, ?, ?, ?, ?, ?, ?)`
 			);
 			items.forEach((c, i) => {
 				const term = c.term.trim();
 				const def = c.definition.trim();
 				if (!term && !def) return;
-				insert.run(id(), setId, term, def, i, now());
+				const mc = packMcDistractorsRow(term, def, c);
+				insert.run(id(), setId, term, def, i, now(), mc);
 			});
 			queries.touchSet(setId);
 		});

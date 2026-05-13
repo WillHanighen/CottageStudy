@@ -58,7 +58,7 @@ src/
         └── [id]/
             ├── +page.{svelte,server.ts}   Set hub: mode picker + card list + delete action
             ├── edit/                       Edit metadata + cards
-            ├── export/+server.ts           GET JSON download (`cottage-study/v1`); visibility same as viewer
+            ├── export/+server.ts           GET JSON download (`cottage-study/v2`); visibility same as viewer
             ├── study/                      Flashcards mode
             ├── learn/                      Adaptive learn mode
             ├── quiz/                       Graded test mode
@@ -118,9 +118,12 @@ handlers in sequence:
 1. **Clerk handler** (or a no-op stub when keys aren't configured) — populates
    `event.locals.auth` with an `AuthObject` matching the
    [Clerk backend SDK](https://clerk.com/docs/references/backend/overview).
-2. **`protect` handler** — for any path under `/dashboard` or `/sets`, if
+2. **`protect` handler** — for `/dashboard` or `/sets/new`, if
    `getAuth(locals).userId` is null, redirects to
-   `/sign-in?redirect=<encoded path>`.
+   `/sign-in?redirect=<encoded path>`. Viewing and studying existing sets
+   (`/sets/[id]`, modes, export) is handled per-route so **public sets work
+   without signing in**; private sets require the owner or redirect/sign-in as
+   implemented in each `+page.server.ts` load.
 
 Detection logic (`isClerkConfigured`) checks the publishable + secret key
 shapes and gracefully falls back to the no-auth handler if either is missing.

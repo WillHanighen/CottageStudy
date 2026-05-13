@@ -297,6 +297,16 @@
 						</svg>
 						Export JSON
 					</a>
+					<a
+						href="/cottage-study-standalone.html"
+						download="cottage-study-standalone.html"
+						class="inline-flex items-center gap-2 rounded-lg border border-zinc-800 bg-zinc-900 px-4 py-2 text-sm font-medium text-zinc-200 transition hover:border-orange-500/40 hover:bg-zinc-800 hover:text-orange-300"
+					>
+						<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+							<path d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 4v11" stroke-linecap="round" stroke-linejoin="round" />
+						</svg>
+						Offline quiz (HTML)
+					</a>
 				{/if}
 				{#if data.isOwner}
 					{#if !confirmingDelete}

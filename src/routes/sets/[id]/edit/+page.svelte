@@ -3,7 +3,9 @@
 	import CardRowsEditor from '$lib/components/CardRowsEditor.svelte';
 	import CharBudgetLabel from '$lib/components/CharBudgetLabel.svelte';
 	import Seo from '$lib/components/Seo.svelte';
+	import type { CardRow } from '$lib/cardRow';
 	import {
+		MAX_CARDS_PER_SET,
 		MAX_SET_DESCRIPTION_CHARS,
 		MAX_SET_TITLE_CHARS
 	} from '$lib/notecardLimits';
@@ -29,10 +31,20 @@
 	});
 
 	// svelte-ignore state_referenced_locally
-	let rows = $state(
+	let rows = $state<CardRow[]>(
 		// svelte-ignore state_referenced_locally
 		data.set.cards.length > 0
-			? data.set.cards.map((c) => ({ term: c.term, definition: c.definition }))
+			? data.set.cards.map((c) => {
+					const row: CardRow = { term: c.term, definition: c.definition };
+					const m = c.mc_distractors;
+					if (m?.incorrect_definitions?.length) {
+						row.incorrect_definitions = m.incorrect_definitions.slice(0, 3);
+					}
+					if (m?.incorrect_terms?.length) {
+						row.incorrect_terms = m.incorrect_terms.slice(0, 3);
+					}
+					return row;
+				})
 			: [
 					{ term: '', definition: '' },
 					{ term: '', definition: '' }
@@ -142,7 +154,7 @@
 			<div>
 				<div class="mb-4 flex items-center justify-between">
 					<h2 class="text-lg font-semibold text-white">Cards</h2>
-					<p class="font-mono text-xs text-zinc-500">{rows.length} entries</p>
+					<p class="font-mono text-xs text-zinc-500">{rows.length} / {MAX_CARDS_PER_SET} entries</p>
 				</div>
 				<CardRowsEditor bind:rows />
 			</div>

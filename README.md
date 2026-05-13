@@ -31,7 +31,8 @@ bun run dev                # http://localhost:5173
 - **Public set discovery** at `/explore` (anyone can browse sets marked public).
 - **Set editor** with a JS-driven row editor that round-trips a JSON cards
   payload through a hidden form field on submit.
-- **Portable export** (`cottage-study/v1` JSON) from `/sets/[id]` for public
+- **Portable export** (`cottage-study/v2` JSON, with optional plausible MC distractors) from `/sets/[id]` for public
+  sets; **[offline quiz player](static/cottage-study-standalone.html)** (`/cottage-study-standalone.html`) is a single HTML file that loads v1 or v2 exports without a network.
   sets or your own decks — usable for backup or moving between workspaces.
 - **Four study modes** per set, each at its own route. See
   [`docs/study-modes.md`](./docs/study-modes.md).

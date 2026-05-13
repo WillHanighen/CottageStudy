@@ -103,7 +103,7 @@ A Quizlet-style **Test** mode. Three phases driven by a `phase` state:
 
 | Type            | Slot cost | Min deck size | Notes                                                                              |
 | --------------- | --------- | ------------- | ---------------------------------------------------------------------------------- |
-| Multiple choice | 1         | 4             | 4 shuffled options, 1 correct + 3 deduped distractors                              |
+| Multiple choice | 1         | 4             | 4 shuffled options; prefers per-card `incorrect_definitions` / `incorrect_terms` (v2 export), then other cards in the deck |
 | True / False    | 1         | 1             | Coin flip whether the candidate is correct or pulled from the distractor pool     |
 | Written         | 1         | 1             | Case + whitespace-insensitive equality                                             |
 | Matching        | up to 5   | 4             | One block at the end. Up to 5 cards, lettered defs, partial credit per pair       |
@@ -113,7 +113,7 @@ A Quizlet-style **Test** mode. Three phases driven by a `phase` state:
 `generate()` reserves a single Matching block at the end of the question list
 when the type is enabled and the deck has ≥ 4 cards, then fills the remaining
 slots with random single-question types from the user's enabled set. Each
-single question consults a per-question distractor pool that excludes the
+single question consults `buildMcChoices` in [`src/lib/mcDistractors.ts`](../src/lib/mcDistractors.ts), which prefers stored plausible wrong answers, then falls back to the legacy pool that excludes the
 answer card and de-duplicates by `normalize()` (`trim().toLowerCase()` with
 collapsed whitespace).
 

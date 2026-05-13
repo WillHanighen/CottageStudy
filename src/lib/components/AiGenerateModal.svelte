@@ -10,10 +10,11 @@
 		clearApiKey
 	} from '$lib/ai/byok';
 	import { encryptEnvelope, fetchServerPublicKey } from '$lib/ai/encrypt';
+	import type { CardRow } from '$lib/cardRow';
 	import CharBudgetLabel from '$lib/components/CharBudgetLabel.svelte';
+	import { MAX_CARDS_PER_SET } from '$lib/notecardLimits';
 
-	type Card = { term: string; definition: string };
-	type GenerateOk = { status: 'ok'; title: string; cards: Card[] };
+	type GenerateOk = { status: 'ok'; title: string; description: string; cards: CardRow[] };
 	type GenerateNeedsInfo = { status: 'needs_more_info'; reason: string };
 	type GenerateResult = GenerateOk | GenerateNeedsInfo;
 
@@ -22,7 +23,7 @@
 		onResult
 	}: {
 		open?: boolean;
-		onResult: (payload: { title: string; cards: Card[] }) => void;
+		onResult: (payload: { title: string; description: string; cards: CardRow[] }) => void;
 	} = $props();
 
 	let apiKey = $state('');
@@ -240,6 +241,7 @@
 
 			onResult({
 				title: result.title ?? '',
+				description: result.description ?? '',
 				cards: Array.isArray(result.cards) ? result.cards : []
 			});
 			open = false;
@@ -414,10 +416,17 @@
 						class="block w-full resize-y rounded-lg border border-zinc-800 bg-zinc-900/60 px-4 py-3 text-sm leading-relaxed text-white placeholder:text-zinc-700 transition-colors focus:border-orange-500 focus:outline-none"
 					></textarea>
 					<p class="mt-1 text-[12px] text-zinc-500">
+						Generation scales to the guide (often ~80 cards; dense material may use up to
+						{MAX_CARDS_PER_SET}, the hard cap). Instructions tell the model not to add filler or leave the
+						set unrealistically small when the source supports more.
+						<br />
 						Note: Different models have different maximum input (token) lengths.
-						<br>Words, text characters, individual numbers, etc. do not map to individual tokens.
-						<br>Diffrent models, providers, and other factors such as load may affect generation speed.
-						<br><strong>AI is not perfect and can make mistakes. Always double-check AI generated output for accuracy, completeness, relevence, and suitability.</strong>
+						<br />Words, text characters, individual numbers, etc. do not map to individual tokens.
+						<br />Diffrent models, providers, and other factors such as load may affect generation speed.
+						<br /><strong
+							>AI is not perfect and can make mistakes. Always double-check AI generated output for
+							accuracy, completeness, relevence, and suitability.</strong
+						>
 					</p>
 				</div>
 

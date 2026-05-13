@@ -13,13 +13,26 @@ export const GET: RequestHandler = ({ params, locals }) => {
 		throw error(403, 'This set is private.');
 	}
 
+	const cards = set.cards.map((c) => {
+		const base = { term: c.term, definition: c.definition };
+		const m = c.mc_distractors;
+		if (!m || (m.incorrect_definitions.length === 0 && m.incorrect_terms.length === 0)) {
+			return base;
+		}
+		return {
+			...base,
+			...(m.incorrect_definitions.length > 0 ? { incorrect_definitions: m.incorrect_definitions } : {}),
+			...(m.incorrect_terms.length > 0 ? { incorrect_terms: m.incorrect_terms } : {})
+		};
+	});
+
 	const payload = {
-		format: 'cottage-study/v1',
+		format: 'cottage-study/v2',
 		exported_at: new Date().toISOString(),
 		title: set.title,
 		description: set.description,
 		is_public: !!set.is_public,
-		cards: set.cards.map((c) => ({ term: c.term, definition: c.definition }))
+		cards
 	};
 
 	const slug =

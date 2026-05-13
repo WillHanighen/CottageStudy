@@ -5,11 +5,14 @@
 	import CharBudgetLabel from '$lib/components/CharBudgetLabel.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import {
+		MAX_CARDS_PER_SET,
 		MAX_CARD_DEFINITION_CHARS,
 		MAX_CARD_TERM_CHARS,
+		MAX_MC_DISTRACTORS_PER_SIDE,
 		MAX_SET_DESCRIPTION_CHARS,
 		MAX_SET_TITLE_CHARS
 	} from '$lib/notecardLimits';
+	import type { CardRow } from '$lib/cardRow';
 	import type { ActionData } from './$types';
 
 	let { form }: { form: ActionData } = $props();
@@ -18,7 +21,7 @@
 	let title = $state('');
 	let description = $state('');
 	let isPublic = $state(false);
-	let rows = $state([
+	let rows = $state<CardRow[]>([
 		{ term: '', definition: '' },
 		{ term: '', definition: '' },
 		{ term: '', definition: '' }
@@ -34,17 +37,33 @@
 	let importInput: HTMLInputElement | undefined = $state();
 	let aiOpen = $state(false);
 
-	function onAiResult(payload: { title: string; cards: Array<{ term: string; definition: string }> }) {
+	function onAiResult(payload: { title: string; description: string; cards: CardRow[] }) {
 		const generated = payload.cards.filter((c) => c.term.trim() || c.definition.trim());
 		if (!title.trim() && payload.title.trim()) {
 			title = payload.title.slice(0, MAX_SET_TITLE_CHARS);
 		}
+		if (!description.trim() && payload.description.trim()) {
+			description = payload.description.slice(0, MAX_SET_DESCRIPTION_CHARS);
+		}
 		rows =
 			generated.length > 0
-				? generated.map((c) => ({
-						term: c.term.slice(0, MAX_CARD_TERM_CHARS),
-						definition: c.definition.slice(0, MAX_CARD_DEFINITION_CHARS)
-					}))
+				? generated.map((c) => {
+						const row: CardRow = {
+							term: c.term.slice(0, MAX_CARD_TERM_CHARS),
+							definition: c.definition.slice(0, MAX_CARD_DEFINITION_CHARS)
+						};
+						if (c.incorrect_definitions?.length) {
+							row.incorrect_definitions = c.incorrect_definitions
+								.slice(0, MAX_MC_DISTRACTORS_PER_SIDE)
+								.map((s) => s.slice(0, MAX_CARD_DEFINITION_CHARS));
+						}
+						if (c.incorrect_terms?.length) {
+							row.incorrect_terms = c.incorrect_terms
+								.slice(0, MAX_MC_DISTRACTORS_PER_SIDE)
+								.map((s) => s.slice(0, MAX_CARD_TERM_CHARS));
+						}
+						return row;
+					})
 				: [{ term: '', definition: '' }];
 		importStatus = {
 			kind: 'ok',
@@ -53,11 +72,33 @@
 	}
 
 	type ImportShape = {
+		format?: unknown;
 		title?: unknown;
 		description?: unknown;
 		is_public?: unknown;
 		cards?: unknown;
 	};
+
+	function rowFromImportObj(obj: Record<string, unknown>): CardRow {
+		const term = String(obj.term ?? '').slice(0, MAX_CARD_TERM_CHARS);
+		const definition = String(obj.definition ?? '').slice(0, MAX_CARD_DEFINITION_CHARS);
+		const row: CardRow = { term, definition };
+		if (Array.isArray(obj.incorrect_definitions)) {
+			const list = obj.incorrect_definitions
+				.map((x) => String(x ?? '').slice(0, MAX_CARD_DEFINITION_CHARS).trim())
+				.filter(Boolean)
+				.slice(0, MAX_MC_DISTRACTORS_PER_SIDE);
+			if (list.length) row.incorrect_definitions = list;
+		}
+		if (Array.isArray(obj.incorrect_terms)) {
+			const list = obj.incorrect_terms
+				.map((x) => String(x ?? '').slice(0, MAX_CARD_TERM_CHARS).trim())
+				.filter(Boolean)
+				.slice(0, MAX_MC_DISTRACTORS_PER_SIDE);
+			if (list.length) row.incorrect_terms = list;
+		}
+		return row;
+	}
 
 	async function onImport(event: Event) {
 		const input = event.currentTarget as HTMLInputElement;
@@ -73,13 +114,7 @@
 			}
 
 			const parsedRows = (data.cards as unknown[])
-				.map((c) => {
-					const obj = (c ?? {}) as Record<string, unknown>;
-					return {
-						term: String(obj.term ?? '').slice(0, MAX_CARD_TERM_CHARS),
-						definition: String(obj.definition ?? '').slice(0, MAX_CARD_DEFINITION_CHARS)
-					};
-				})
+				.map((c) => rowFromImportObj((c ?? {}) as Record<string, unknown>))
 				.filter((r) => r.term.trim() || r.definition.trim());
 
 			if (typeof data.title === 'string' && data.title.trim()) {
@@ -282,7 +317,7 @@
 			<div>
 				<div class="mb-4 flex items-center justify-between">
 					<h2 class="text-lg font-semibold text-white">Cards</h2>
-					<p class="font-mono text-xs text-zinc-500">{rows.length} entries</p>
+					<p class="font-mono text-xs text-zinc-500">{rows.length} / {MAX_CARDS_PER_SET} entries</p>
 				</div>
 				<CardRowsEditor bind:rows />
 			</div>

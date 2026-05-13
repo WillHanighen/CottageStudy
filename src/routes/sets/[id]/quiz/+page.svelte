@@ -1,5 +1,6 @@
 <script lang="ts">
 	import Seo from '$lib/components/Seo.svelte';
+	import { buildMcChoices } from '$lib/mcDistractors';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -97,18 +98,13 @@
 		const promptText = askDefinition ? card.term : card.definition;
 		const correctAnswer = askDefinition ? card.definition : card.term;
 		if (type === 'mc') {
-			const distractorPool = cards
-				.filter((c) => c.id !== card.id)
-				.map((c) => (askDefinition ? c.definition : c.term))
-				.filter((t, i, arr) => arr.indexOf(t) === i && normalize(t) !== normalize(correctAnswer));
-			const distractors = shuffle(distractorPool).slice(0, 3);
 			return {
 				id: uid(),
 				type: 'mc',
 				cardId: card.id,
 				prompt: promptText,
 				correct: correctAnswer,
-				choices: shuffle([correctAnswer, ...distractors])
+				choices: buildMcChoices(card, cards, askDefinition)
 			};
 		}
 		if (type === 'tf') {

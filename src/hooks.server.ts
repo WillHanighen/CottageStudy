@@ -8,7 +8,7 @@ import { getAuth } from '$lib/server/auth';
 
 initDb();
 
-const PROTECTED_PREFIXES = ['/dashboard', '/sets'];
+const PROTECTED_PREFIXES = ['/dashboard', '/sets/new'];
 
 // Clerk's publishable keys look like "pk_test_<base64>" or "pk_live_<base64>".
 // We only run the Clerk handler when both keys look real, otherwise the whole

@@ -25,15 +25,31 @@ export const actions: Actions = {
 			return fail(400, { error: 'Title is required.', title, description });
 		}
 
-		let cards: Array<{ term: string; definition: string }> = [];
+		let cards: Array<{
+			term: string;
+			definition: string;
+			incorrect_definitions?: string[];
+			incorrect_terms?: string[];
+		}> = [];
 		try {
 			const parsed = JSON.parse(cardsRaw);
 			if (Array.isArray(parsed)) {
 				cards = parsed
-					.map((c) => ({
-						term: String(c?.term ?? ''),
-						definition: String(c?.definition ?? '')
-					}))
+					.map((c) => {
+						const obj = (c ?? {}) as Record<string, unknown>;
+						const incorrect_definitions = Array.isArray(obj.incorrect_definitions)
+							? obj.incorrect_definitions.map((x) => String(x ?? ''))
+							: undefined;
+						const incorrect_terms = Array.isArray(obj.incorrect_terms)
+							? obj.incorrect_terms.map((x) => String(x ?? ''))
+							: undefined;
+						return {
+							term: String(obj.term ?? ''),
+							definition: String(obj.definition ?? ''),
+							...(incorrect_definitions ? { incorrect_definitions } : {}),
+							...(incorrect_terms ? { incorrect_terms } : {})
+						};
+					})
 					.filter((c) => c.term.trim() || c.definition.trim());
 			}
 		} catch {

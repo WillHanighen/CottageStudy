@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
+	import { buildMcChoices } from '$lib/mcDistractors';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -25,6 +26,7 @@
 	const cards = data.set.cards;
 
 	let phase = $state<'config' | 'practicing'>('config');
+	let configModalOpen = $state(false);
 
 	let queue = $state<Card[]>(shuffle(cards));
 	let mastered = $state<Set<string>>(new Set());
@@ -44,6 +46,12 @@
 	let enableWritten = $state(true);
 	let enableTf = $state(true);
 
+	/** Modal draft — synced when opening the dialog */
+	let draftAskDefinition = $state(true);
+	let draftEnableMc = $state(cards.length >= 4);
+	let draftEnableWritten = $state(true);
+	let draftEnableTf = $state(true);
+
 	const current = $derived(queue[0]);
 	const finished = $derived(mastered.size >= cards.length);
 	const promptText = $derived(askDefinition ? current?.term : current?.definition);
@@ -62,6 +70,16 @@
 
 	const learnKindsConfigured = $derived(learnKindPool.length > 0);
 
+	const draftLearnKindPool = $derived.by(() => {
+		const pool: LearnKind[] = [];
+		if (draftEnableMc && cards.length >= 4) pool.push('mc');
+		if (draftEnableWritten) pool.push('written');
+		if (draftEnableTf) pool.push('tf');
+		return pool;
+	});
+
+	const draftLearnKindsConfigured = $derived(draftLearnKindPool.length > 0);
+
 	const hintSupported = $derived(learnKind === 'mc' || learnKind === 'written');
 
 	const hintSummary = $derived.by(() => {
@@ -69,6 +87,49 @@
 		if (!ans) return '';
 		const first = ans[0] ?? '';
 		return `${ans.length} characters · starts with “${first}”`;
+	});
+
+	const typeBadgeLabel = $derived.by(() => {
+		if (learnKind === 'tf') return 'True / false';
+		if (learnKind === 'mc') return 'Multiple choice';
+		return 'Written';
+	});
+
+	const mainPromptLine = $derived.by(() => {
+		if (!current) return '';
+		if (learnKind === 'tf') {
+			return askDefinition
+				? `${current.term}: “${tfCandidate}”`
+				: `“${current.definition}”: “${tfCandidate}”`;
+		}
+		if (learnKind === 'mc') {
+			return askDefinition ? (current.term ?? '') : (current.definition ?? '');
+		}
+		return promptText ?? '';
+	});
+
+	const subPromptLine = $derived.by(() => {
+		if (learnKind === 'tf') {
+			return askDefinition
+				? 'Is the following definition correct for this term?'
+				: 'Is the following term correct for this definition?';
+		}
+		if (learnKind === 'mc') {
+			return askDefinition
+				? 'Choose the definition that matches this term.'
+				: 'Choose the term that matches this definition.';
+		}
+		return askDefinition ? 'Type the definition for this term.' : 'Type the term for this definition.';
+	});
+
+	const feedbackRevealText = $derived.by(() => {
+		if (learnKind === 'mc') {
+			return askDefinition ? (current?.definition ?? '') : (current?.term ?? '');
+		}
+		if (learnKind === 'tf') {
+			return askDefinition ? (current?.definition ?? '') : (current?.term ?? '');
+		}
+		return answerText ?? '';
 	});
 
 	function pickLearnKind(): LearnKind {
@@ -99,12 +160,7 @@
 		const correctAnswer = askDefinition ? current.definition : current.term;
 
 		if (learnKind === 'mc') {
-			const distractorPool = cards
-				.filter((c) => c.id !== current.id)
-				.map((c) => (askDefinition ? c.definition : c.term))
-				.filter((t, i, arr) => arr.indexOf(t) === i && normalize(t) !== normalize(correctAnswer));
-			const distractors = shuffle(distractorPool).slice(0, 3);
-			currentChoices = shuffle([correctAnswer, ...distractors]);
+			currentChoices = buildMcChoices(current, cards, askDefinition);
 			tfCandidate = '';
 			return;
 		}
@@ -132,14 +188,6 @@
 	$effect(() => {
 		if (phase !== 'practicing') return;
 		if (current) setupRound();
-	});
-
-	/** Correct answers auto-advance shortly; wrong stays until Continue / Enter */
-	$effect(() => {
-		if (phase !== 'practicing') return;
-		if (result !== 'correct') return;
-		const id = setTimeout(() => advance(), 620);
-		return () => clearTimeout(id);
 	});
 
 	function grade(isCorrect: boolean) {
@@ -184,6 +232,8 @@
 		}
 		result = null;
 		selected = null;
+		typed = '';
+		hintVisible = false;
 	}
 
 	function startLearn() {
@@ -193,20 +243,83 @@
 		setTimeout(() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }), 0);
 	}
 
-	function backToSetup() {
+	function backToSetupFresh() {
 		phase = 'config';
 		resetRun();
+		configModalOpen = false;
 		setTimeout(() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }), 0);
 	}
 
+	function syncDraftFromSession() {
+		draftAskDefinition = askDefinition;
+		draftEnableMc = enableMc;
+		draftEnableWritten = enableWritten;
+		draftEnableTf = enableTf;
+	}
+
+	function openConfigModal() {
+		syncDraftFromSession();
+		configModalOpen = true;
+	}
+
+	function closeConfigModal() {
+		configModalOpen = false;
+	}
+
+	function applyConfigFromModal() {
+		if (!draftLearnKindsConfigured) return;
+		askDefinition = draftAskDefinition;
+		enableMc = draftEnableMc;
+		enableWritten = draftEnableWritten;
+		enableTf = draftEnableTf;
+		configModalOpen = false;
+		setTimeout(() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }), 0);
+	}
+
+	$effect(() => {
+		if (!configModalOpen) return;
+		const onEsc = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') closeConfigModal();
+		};
+		window.addEventListener('keydown', onEsc);
+		return () => window.removeEventListener('keydown', onEsc);
+	});
+
+	$effect(() => {
+		if (!configModalOpen) return;
+		document.body.style.overflow = 'hidden';
+		return () => {
+			document.body.style.overflow = '';
+		};
+	});
+
 	onMount(() => {
 		const onKey = (e: KeyboardEvent) => {
-			if (phase !== 'practicing') return;
+			if (configModalOpen) return;
+			if (phase !== 'practicing' || finished) return;
 			const t = e.target as HTMLElement | null;
-			if (t?.closest('input, textarea, select, button[data-choice]')) return;
-			if (e.key === 'Enter' && result !== null) {
+			if (t?.closest('input, textarea, select, [data-choice]')) {
+				// Still allow number keys and Enter from input when appropriate
+				if (t?.closest('input, textarea') && e.key !== 'Enter') return;
+			}
+
+			if (result !== null && (e.key === 'Enter' || e.key === ' ')) {
 				e.preventDefault();
 				advance();
+				return;
+			}
+
+			if (result !== null) return;
+
+			const n = parseInt(e.key, 10);
+			if (learnKind === 'mc' && !Number.isNaN(n) && n >= 1 && n <= currentChoices.length) {
+				e.preventDefault();
+				answerMc(currentChoices[n - 1]!);
+				return;
+			}
+			if (learnKind === 'tf' && (e.key === '1' || e.key === '2')) {
+				e.preventDefault();
+				answerTf(e.key === '1' ? 'true' : 'false');
 			}
 		};
 		window.addEventListener('keydown', onKey);
@@ -356,22 +469,23 @@
 		{:else}
 			<!-- Progress (only while practicing and not finished) -->
 			{#if !finished && current}
-				<div class="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 font-mono text-xs tracking-widest text-zinc-500 uppercase">
-					<span>{mastered.size} / {cards.length} mastered</span>
-					<div class="flex items-center gap-3">
-						<span>{accuracy}% accuracy</span>
-						<button
-							type="button"
-							onclick={backToSetup}
-							class="text-orange-400/90 transition hover:text-orange-300"
-						>
-							Change setup
-						</button>
-					</div>
+				<div
+					class="mb-5 flex max-w-2xl flex-wrap items-center justify-between gap-x-4 gap-y-2 font-mono text-xs text-zinc-500"
+				>
+					<span>{mastered.size} / {cards.length} mastered · {accuracy}% accuracy</span>
+					<button
+						type="button"
+						onclick={openConfigModal}
+						class="text-orange-400/90 transition hover:text-orange-300"
+					>
+						Change setup
+					</button>
 				</div>
-				<div class="mb-10 h-1 overflow-hidden rounded-full bg-zinc-800">
+				<div
+					class="mb-5 h-[5px] w-full max-w-2xl overflow-hidden rounded-full border border-zinc-800 bg-zinc-900"
+				>
 					<div
-						class="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-400 transition-[width] duration-500"
+						class="h-full rounded-full bg-orange-500 transition-[width] duration-500 ease-out"
 						style="width: {(mastered.size / cards.length) * 100}%"
 					></div>
 				</div>
@@ -379,36 +493,49 @@
 
 			{#if finished}
 				<div
-					class="grain rounded-3xl border border-orange-500/30 bg-gradient-to-br from-zinc-900/80 to-orange-950/20 p-12 text-center backdrop-blur-xl"
+					class="grain mx-auto max-w-2xl rounded-2xl border border-orange-500/30 bg-zinc-900/50 p-10 text-center backdrop-blur-xl sm:p-12"
 				>
-					<div
-						class="mx-auto mb-6 grid h-16 w-16 place-items-center rounded-2xl border border-orange-500/40 bg-orange-500/10 text-orange-400"
+					<div class="mb-5 text-center">
+						<div class="font-display text-2xl font-semibold text-white sm:text-[1.35rem]">You did it</div>
+						<p class="mt-2 text-sm text-zinc-400">
+							Mastered all {cards.length} cards with {accuracy}% accuracy across {totalAnswered} attempts.
+						</p>
+					</div>
+					<div class="mb-5 grid grid-cols-3 gap-2.5 sm:gap-3">
+						<div class="rounded-[0.65rem] border border-zinc-800 bg-zinc-900/60 py-3.5 text-center">
+							<div class="font-mono text-2xl font-bold text-orange-500 sm:text-[1.65rem]">{totalCorrect}</div>
+							<div class="mt-1 font-mono text-[10px] tracking-widest text-zinc-500 uppercase sm:text-[0.7rem]">
+								Correct
+							</div>
+						</div>
+						<div class="rounded-[0.65rem] border border-zinc-800 bg-zinc-900/60 py-3.5 text-center">
+							<div class="font-mono text-2xl font-bold text-orange-500 sm:text-[1.65rem]">
+								{totalAnswered - totalCorrect}
+							</div>
+							<div class="mt-1 font-mono text-[10px] tracking-widest text-zinc-500 uppercase sm:text-[0.7rem]">
+								Wrong
+							</div>
+						</div>
+						<div class="rounded-[0.65rem] border border-zinc-800 bg-zinc-900/60 py-3.5 text-center">
+							<div class="font-mono text-2xl font-bold text-orange-500 sm:text-[1.65rem]">{accuracy}%</div>
+							<div class="mt-1 font-mono text-[10px] tracking-widest text-zinc-500 uppercase sm:text-[0.7rem]">
+								Score
+							</div>
+						</div>
+					</div>
+					<button
+						type="button"
+						onclick={backToSetupFresh}
+						class="w-full rounded-[0.65rem] bg-orange-500 py-3.5 text-base font-semibold text-white transition hover:brightness-110"
 					>
-						<svg class="h-8 w-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-							<path d="M5 13l4 4L19 7" stroke-linecap="round" stroke-linejoin="round" />
-						</svg>
-					</div>
-					<h2 class="font-display text-4xl font-medium italic text-white sm:text-5xl" style="font-variation-settings: 'opsz' 144;">
-						You did it.
-					</h2>
-					<p class="mt-3 text-zinc-400">
-						Mastered all {cards.length} cards with {accuracy}% accuracy across {totalAnswered} attempts.
-					</p>
-					<div class="mt-8 flex flex-wrap items-center justify-center gap-3">
-						<button
-							type="button"
-							onclick={backToSetup}
-							class="rounded-xl bg-orange-500 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-orange-500/30 transition hover:bg-orange-600"
-						>
-							Practice again
-						</button>
-						<a
-							href="/sets/{data.set.id}"
-							class="rounded-xl border border-zinc-800 bg-zinc-900/60 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-zinc-900"
-						>
-							Back to set
-						</a>
-					</div>
+						Practice again
+					</button>
+					<a
+						href="/sets/{data.set.id}"
+						class="mt-2 block w-full rounded-[0.65rem] border border-zinc-800 py-3.5 text-center text-base font-medium text-zinc-400 transition hover:border-zinc-600 hover:text-zinc-200"
+					>
+						Back to set
+					</a>
 				</div>
 			{:else if current}
 				{#if !learnKindsConfigured}
@@ -417,86 +544,79 @@
 					</p>
 				{:else}
 					<div
-						class="grain mb-6 overflow-hidden rounded-3xl border border-zinc-800/70 bg-zinc-900/60 p-8 backdrop-blur-xl sm:p-10"
+						class="grain mx-auto w-full max-w-2xl rounded-2xl border border-zinc-800 bg-zinc-900/40 px-6 py-6 backdrop-blur-md sm:px-7 sm:py-6"
 					>
-						<div class="mb-3 flex flex-wrap items-start justify-between gap-3">
-							<div>
-								<p class="font-mono text-[10px] tracking-widest text-zinc-500 uppercase">
-									{askDefinition ? 'Term' : 'Definition'}
-									<span class="text-zinc-600"> · </span>
-									<span class="text-orange-400/90">
-										{learnKind === 'mc'
-											? 'Multiple choice'
-											: learnKind === 'written'
-												? 'Written'
-												: 'True / False'}
-									</span>
-								</p>
+						<div class="mb-4 flex items-center justify-between gap-3">
+							<span
+								class="rounded-full border border-zinc-800 bg-zinc-900 px-2.5 py-1 font-mono text-[0.65rem] font-semibold tracking-widest text-zinc-400 uppercase"
+							>
+								{typeBadgeLabel}
+							</span>
+							<div class="flex items-center gap-2">
+								{#if hintSupported}
+									<button
+										type="button"
+										disabled={!!result}
+										onclick={revealHint}
+										class="rounded-full border border-zinc-800 bg-zinc-950/60 px-2.5 py-1 font-mono text-[0.65rem] tracking-widest text-zinc-400 uppercase transition hover:border-orange-500/40 hover:text-orange-200 disabled:cursor-not-allowed disabled:opacity-40"
+									>
+										Hint
+									</button>
+								{/if}
+								<span class="font-mono text-sm text-zinc-500">
+									{mastered.size} / {cards.length}
+								</span>
 							</div>
-							{#if hintSupported}
-								<button
-									type="button"
-									disabled={!!result}
-									onclick={revealHint}
-									class="shrink-0 rounded-lg border border-zinc-700 bg-zinc-950/60 px-3 py-1.5 font-mono text-[10px] tracking-widest text-zinc-300 uppercase transition hover:border-orange-500/50 hover:text-orange-200 disabled:cursor-not-allowed disabled:opacity-40"
-								>
-									Hint
-								</button>
-							{/if}
 						</div>
-						<p
-							class="font-display text-3xl leading-tight font-medium text-white sm:text-4xl"
-							style="font-variation-settings: 'opsz' 144, 'SOFT' 30;"
-						>
-							{promptText}
+
+						<p class="text-lg font-medium leading-[1.45] text-zinc-100 sm:text-xl">
+							{mainPromptLine}
 						</p>
+						<p class="mt-1.5 text-sm leading-relaxed text-zinc-500">{subPromptLine}</p>
+
 						{#if hintVisible && hintSupported && hintSummary}
-							<p class="mt-5 rounded-xl border border-orange-500/25 bg-orange-500/5 px-4 py-3 font-mono text-xs text-orange-200/90">
+							<p
+								class="mt-4 rounded-[0.65rem] border border-orange-500/25 bg-orange-500/5 px-4 py-3 font-mono text-xs text-orange-200/90"
+							>
 								{hintSummary}
 							</p>
 						{/if}
-					</div>
 
-					{#if learnKind === 'mc'}
-						<div class="grid grid-cols-1 gap-3">
-							{#each currentChoices as choice (choice)}
-								{@const isSelected = selected === choice}
-								{@const isCorrectChoice =
-									choice.trim().toLowerCase() === answerText?.trim().toLowerCase()}
-								<button
-									type="button"
-									data-choice
-									disabled={!!result || !learnKindsConfigured}
-									onclick={() => answerMc(choice)}
-									class="group flex items-center gap-4 rounded-2xl border bg-zinc-900/40 p-5 text-left transition-all
-									{result && isCorrectChoice
-										? 'border-emerald-500/50 bg-emerald-500/10'
-										: result && isSelected
-											? 'border-red-500/50 bg-red-500/10'
-											: 'border-zinc-800/70 hover:border-orange-500/40 hover:bg-zinc-900/70'}
-									disabled:cursor-default"
-								>
-									<span
-										class="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-zinc-800 bg-zinc-950 font-mono text-xs text-zinc-400 transition group-hover:border-orange-500/50 group-hover:text-orange-300
-										{result && isCorrectChoice ? '!border-emerald-500/60 !text-emerald-400' : ''}
-										{result && isSelected && !isCorrectChoice ? '!border-red-500/60 !text-red-400' : ''}"
+						<div class="mt-5 flex flex-col gap-2">
+							{#if learnKind === 'mc'}
+								{#each currentChoices as choice, i (choice)}
+									{@const isSelected = selected === choice}
+									{@const isCorrectChoice =
+										choice.trim().toLowerCase() === answerText?.trim().toLowerCase()}
+									<button
+										type="button"
+										data-choice
+										disabled={!!result || !learnKindsConfigured}
+										onclick={() => answerMc(choice)}
+										class="flex items-start gap-2.5 rounded-xl border bg-zinc-950/50 px-4 py-3.5 text-left text-sm text-zinc-100 transition
+										{!result ? 'border-zinc-800 hover:border-orange-500/45 hover:bg-orange-500/[0.12]' : ''}
+										{result && isCorrectChoice
+											? 'border-emerald-500/50 bg-emerald-500/[0.12]'
+											: ''}
+										{result && isSelected && !isCorrectChoice
+											? 'border-red-500/50 bg-red-500/[0.12]'
+											: ''}
+										{result && !isCorrectChoice && !isSelected ? 'opacity-[0.38]' : ''}
+										disabled:cursor-default"
 									>
-										{currentChoices.indexOf(choice) + 1}
-									</span>
-									<span class="text-sm leading-relaxed text-zinc-100 sm:text-base">{choice}</span>
-								</button>
-							{/each}
-						</div>
-					{:else if learnKind === 'tf'}
-						<div>
-							<p class="mb-2 font-mono text-[10px] tracking-widest text-zinc-500 uppercase">
-								Proposed {askDefinition ? 'definition' : 'term'}
-							</p>
-							<p class="mb-6 rounded-2xl border border-zinc-800 bg-zinc-950/40 px-5 py-4 text-sm leading-relaxed text-zinc-100">
-								{tfCandidate}
-							</p>
-							<div class="grid grid-cols-2 gap-3">
-								{#each ['true', 'false'] as opt (opt)}
+										<span
+											class="grid h-[1.65rem] min-w-[1.65rem] place-items-center rounded-md border border-zinc-800 bg-zinc-900 font-mono text-[0.7rem] font-bold text-zinc-400
+											{result && isCorrectChoice ? '!border-emerald-500 !bg-emerald-500 !text-white' : ''}
+											{result && isSelected && !isCorrectChoice ? '!border-red-500 !bg-red-500 !text-white' : ''}"
+										>
+											{i + 1}
+										</span>
+										<span class="min-w-0 flex-1 leading-relaxed">{choice}</span>
+									</button>
+								{/each}
+							{:else if learnKind === 'tf'}
+								{#each [{ k: 'true' as const, label: 'True' }, { k: 'false' as const, label: 'False' }] as tfOpt, i (tfOpt.k)}
+									{@const opt = tfOpt.k}
 									{@const isSelected = selected === opt}
 									{@const isAnswer = result !== null && opt === tfCorrect}
 									{@const isWrongPick = result !== null && isSelected && opt !== tfCorrect}
@@ -504,86 +624,219 @@
 										type="button"
 										data-choice
 										disabled={!!result || !learnKindsConfigured}
-										onclick={() => answerTf(opt as 'true' | 'false')}
-										class="rounded-2xl border px-4 py-4 text-sm font-semibold tracking-wide uppercase transition
-										{isAnswer
-											? 'border-emerald-500/50 bg-emerald-500/10 text-white'
-											: isWrongPick
-												? 'border-red-500/50 bg-red-500/10 text-white'
-												: isSelected
-													? 'border-orange-500/50 bg-orange-500/10 text-white'
-													: 'border-zinc-800 bg-zinc-950/40 text-zinc-300 hover:border-orange-500/40 hover:bg-zinc-900/70'}
+										onclick={() => answerTf(opt)}
+										class="flex items-start gap-2.5 rounded-xl border bg-zinc-950/50 px-4 py-3.5 text-left text-sm text-zinc-100 transition
+										{!result ? 'border-zinc-800 hover:border-orange-500/45 hover:bg-orange-500/[0.12]' : ''}
+										{isAnswer ? 'border-emerald-500/50 bg-emerald-500/[0.12]' : ''}
+										{isWrongPick ? 'border-red-500/50 bg-red-500/[0.12]' : ''}
+										{result && !isAnswer && !isWrongPick ? 'opacity-[0.38]' : ''}
 										disabled:cursor-default"
 									>
-										{opt === 'true' ? 'True' : 'False'}
+										<span
+											class="grid h-[1.65rem] min-w-[1.65rem] place-items-center rounded-md border border-zinc-800 bg-zinc-900 font-mono text-[0.7rem] font-bold text-zinc-400
+											{isAnswer ? '!border-emerald-500 !bg-emerald-500 !text-white' : ''}
+											{isWrongPick ? '!border-red-500 !bg-red-500 !text-white' : ''}"
+										>
+											{i + 1}
+										</span>
+										<span class="font-medium">{tfOpt.label}</span>
 									</button>
 								{/each}
-							</div>
-						</div>
-					{:else}
-						<form
-							onsubmit={(e) => {
-								e.preventDefault();
-								if (!result && typed.trim()) answerWritten();
-							}}
-							class="space-y-3"
-						>
-							<input
-								type="text"
-								bind:value={typed}
-								disabled={!!result || !learnKindsConfigured}
-								placeholder={askDefinition ? 'Type the definition' : 'Type the term'}
-								autocomplete="off"
-								class="block w-full rounded-2xl border border-zinc-800 bg-zinc-900/60 px-5 py-4 text-base text-white placeholder:text-zinc-700 transition-colors focus:border-orange-500
-								{result === 'correct' ? '!border-emerald-500/50' : ''}
-								{result === 'wrong' ? '!border-red-500/50' : ''}"
-							/>
-							<button
-								type="submit"
-								disabled={!!result || !typed.trim() || !learnKindsConfigured}
-								class="w-full rounded-xl bg-white px-5 py-3 text-sm font-semibold text-zinc-950 transition-colors hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
-							>
-								Check answer
-							</button>
-						</form>
-					{/if}
-
-					{#if result}
-						<div class="mt-5 rounded-2xl border border-zinc-800/70 bg-zinc-900/40 p-5 text-center backdrop-blur">
-							{#if result === 'correct'}
-								<p class="font-mono text-xs tracking-widest text-emerald-400 uppercase">Correct</p>
-								<p class="mt-2 font-mono text-[10px] tracking-widest text-zinc-600 uppercase">
-									Continuing automatically &middot; Enter or tap below to go now
-								</p>
-								<button
-									type="button"
-									onclick={advance}
-									class="mt-4 inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/10 px-5 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-500/20"
-								>
-									Next card &rarr;
-								</button>
 							{:else}
-								<p class="font-mono text-xs tracking-widest text-red-400 uppercase">Not quite</p>
-								<p class="mt-2 text-sm text-zinc-400">
-									Answer: <span class="text-white">{answerText}</span>
-								</p>
-								<p class="mt-3 font-mono text-[10px] tracking-widest text-zinc-600 uppercase">
-									Press Enter or tap Continue
-								</p>
-							{/if}
-							{#if result === 'wrong'}
-								<button
-									type="button"
-									onclick={advance}
-									class="mt-4 inline-flex items-center gap-2 rounded-xl bg-orange-500 px-5 py-2 text-sm font-semibold text-white shadow-lg shadow-orange-500/20 transition hover:bg-orange-600"
+								<form
+									onsubmit={(e) => {
+										e.preventDefault();
+										if (!result && typed.trim()) answerWritten();
+									}}
+									class="flex flex-col gap-2"
 								>
-									Continue &rarr;
-								</button>
+									<input
+										type="text"
+										bind:value={typed}
+										disabled={!!result || !learnKindsConfigured}
+										placeholder={askDefinition ? 'Type the definition' : 'Type the term'}
+										autocomplete="off"
+										class="w-full rounded-xl border border-zinc-800 bg-zinc-950/50 px-4 py-3.5 text-base text-zinc-100 placeholder:text-zinc-600 focus:border-orange-500/50 focus:outline-none
+										{result === 'correct' ? '!border-emerald-500/50' : ''}
+										{result === 'wrong' ? '!border-red-500/50' : ''}"
+									/>
+									<button
+										type="submit"
+										disabled={!!result || !typed.trim() || !learnKindsConfigured}
+										class="w-full rounded-xl border border-zinc-700 bg-zinc-100 py-3 text-sm font-semibold text-zinc-950 transition hover:bg-white disabled:cursor-not-allowed disabled:opacity-50"
+									>
+										Check answer
+									</button>
+								</form>
 							{/if}
 						</div>
-					{/if}
+
+						{#if result === 'correct'}
+							<div
+								class="mt-4 rounded-[0.65rem] border border-emerald-500/35 bg-emerald-500/[0.12] px-4 py-3 text-sm leading-relaxed text-emerald-200/95"
+							>
+								<strong>Correct.</strong>
+								<div class="mt-2 text-[0.78rem] text-zinc-400">{feedbackRevealText}</div>
+							</div>
+						{:else if result === 'wrong'}
+							<div
+								class="mt-4 rounded-[0.65rem] border border-red-500/35 bg-red-500/[0.12] px-4 py-3 text-sm leading-relaxed text-red-200/95"
+							>
+								<strong>Incorrect.</strong>
+								<div class="mt-2 text-[0.78rem] text-zinc-400">
+									Correct answer: {feedbackRevealText}
+								</div>
+							</div>
+						{/if}
+
+						{#if result}
+							<button
+								type="button"
+								onclick={advance}
+								class="mt-4 w-full rounded-[0.65rem] bg-orange-500 py-3 text-sm font-semibold text-white transition hover:brightness-110"
+							>
+								Next
+							</button>
+						{/if}
+					</div>
 				{/if}
 			{/if}
 		{/if}
 	</div>
+
+	{#if configModalOpen}
+		<div class="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+			<button
+				type="button"
+				class="absolute inset-0 bg-zinc-950/80 backdrop-blur-md"
+				aria-label="Close setup"
+				onclick={closeConfigModal}
+			></button>
+			<div
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="learn-config-modal-title"
+				class="relative z-10 max-h-[min(90vh,720px)] w-full max-w-lg overflow-y-auto rounded-2xl border border-zinc-800 bg-zinc-900/95 p-6 shadow-2xl shadow-black/60"
+			>
+				<div class="mb-5 flex items-start justify-between gap-3">
+					<h2 id="learn-config-modal-title" class="font-display text-xl font-medium text-white">
+						Session setup
+					</h2>
+					<button
+						type="button"
+						class="rounded-lg border border-zinc-800 px-2 py-1 font-mono text-[10px] tracking-widest text-zinc-400 uppercase hover:bg-zinc-800"
+						onclick={closeConfigModal}
+					>
+						Esc
+					</button>
+				</div>
+				<p class="mb-6 text-sm text-zinc-500">
+					Changes apply from this card onward. Your progress ({mastered.size}/{cards.length} mastered)
+					is kept.
+				</p>
+
+				<div class="space-y-6">
+					<div>
+						<p class="mb-3 font-mono text-xs tracking-widest text-zinc-400 uppercase">Prompt with</p>
+						<div class="grid grid-cols-2 gap-3">
+							<button
+								type="button"
+								onclick={() => (draftAskDefinition = true)}
+								class="rounded-xl border p-4 text-left transition
+									{draftAskDefinition
+									? 'border-orange-500/50 bg-orange-500/10 text-white'
+									: 'border-zinc-800 bg-zinc-950/40 text-zinc-300 hover:border-zinc-700'}"
+							>
+								<p class="font-mono text-[10px] tracking-widest text-zinc-500 uppercase">Term</p>
+								<p class="mt-1 text-sm">Show term, answer with definition</p>
+							</button>
+							<button
+								type="button"
+								onclick={() => (draftAskDefinition = false)}
+								class="rounded-xl border p-4 text-left transition
+									{!draftAskDefinition
+									? 'border-orange-500/50 bg-orange-500/10 text-white'
+									: 'border-zinc-800 bg-zinc-950/40 text-zinc-300 hover:border-zinc-700'}"
+							>
+								<p class="font-mono text-[10px] tracking-widest text-zinc-500 uppercase">Definition</p>
+								<p class="mt-1 text-sm">Show definition, answer with term</p>
+							</button>
+						</div>
+					</div>
+
+					<div>
+						<p class="mb-3 font-mono text-xs tracking-widest text-zinc-400 uppercase">
+							Question types
+						</p>
+						<div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+							<label
+								class="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 transition hover:border-zinc-700"
+								class:opacity-50={cards.length < 4}
+							>
+								<input
+									type="checkbox"
+									bind:checked={draftEnableMc}
+									disabled={cards.length < 4}
+									class="mt-0.5 h-4 w-4 accent-orange-500"
+								/>
+								<div>
+									<p class="text-sm font-medium text-white">Multiple choice</p>
+									<p class="mt-0.5 text-xs text-zinc-500">
+										Pick the right answer from four options.
+										{#if cards.length < 4}<span class="text-orange-400/80"> Needs 4+ cards.</span>{/if}
+									</p>
+								</div>
+							</label>
+							<label
+								class="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 transition hover:border-zinc-700"
+							>
+								<input type="checkbox" bind:checked={draftEnableTf} class="mt-0.5 h-4 w-4 accent-orange-500" />
+								<div>
+									<p class="text-sm font-medium text-white">True / False</p>
+									<p class="mt-0.5 text-xs text-zinc-500">Decide whether a pairing is right.</p>
+								</div>
+							</label>
+							<label
+								class="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950/40 p-4 transition hover:border-zinc-700 sm:col-span-2"
+							>
+								<input
+									type="checkbox"
+									bind:checked={draftEnableWritten}
+									class="mt-0.5 h-4 w-4 accent-orange-500"
+								/>
+								<div>
+									<p class="text-sm font-medium text-white">Written</p>
+									<p class="mt-0.5 text-xs text-zinc-500">Type the answer, character-perfect.</p>
+								</div>
+							</label>
+						</div>
+					</div>
+
+					{#if !draftLearnKindsConfigured}
+						<p class="rounded-lg border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-300">
+							Pick at least one question type.
+						</p>
+					{/if}
+
+					<div class="flex flex-col gap-2 sm:flex-row sm:justify-end">
+						<button
+							type="button"
+							onclick={closeConfigModal}
+							class="rounded-xl border border-zinc-800 px-4 py-3 text-sm font-medium text-zinc-300 hover:bg-zinc-800/80"
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							onclick={applyConfigFromModal}
+							disabled={!draftLearnKindsConfigured}
+							class="rounded-xl bg-orange-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-orange-600 disabled:cursor-not-allowed disabled:bg-zinc-800 disabled:text-zinc-500"
+						>
+							Apply
+						</button>
+					</div>
+				</div>
+			</div>
+		</div>
+	{/if}
 </section>

@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cottage Study — offline quiz</title>
+<style>
+  :root {
+    --bg: #09090b;
+    --surface: rgba(24 24 27 / 0.4);
+    --surface2: rgb(24 24 27);
+    --border: rgb(39 39 42);
+    --text: #fafafa;
+    --muted: #a1a1aa;
+    --accent: #f97316;
+    --accent-dim: rgba(249 115 22 / 0.15);
+    --correct: rgb(34 197 94);
+    --correct-bg: rgba(34 197 94 / 0.12);
+    --wrong: rgb(239 68 68);
+    --wrong-bg: rgba(239 68 68 / 0.12);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem;
+    -webkit-font-smoothing: antialiased;
+  }
+  .display {
+    font-family: ui-serif, Georgia, 'Times New Roman', serif;
+    font-style: italic;
+  }
+  h1 {
+    font-size: 1.35rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--text);
+    margin-bottom: 0.35rem;
+    text-align: center;
+  }
+  .subtitle { color: var(--muted); font-size: 0.8rem; margin-bottom: 1.75rem; text-align: center; max-width: 36rem; line-height: 1.5; }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 1rem;
+    width: 100%;
+    max-width: 40rem;
+    padding: 1.5rem 1.75rem;
+    margin-bottom: 1.25rem;
+    backdrop-filter: blur(8px);
+  }
+
+  .progress-wrap {
+    background: var(--surface2);
+    border-radius: 999px;
+    height: 5px;
+    width: 100%;
+    max-width: 40rem;
+    margin-bottom: 1.25rem;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .progress-bar {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 999px;
+    transition: width 0.35s ease;
+  }
+
+  .q-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+  }
+  .q-type-badge {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--surface2);
+    color: var(--muted);
+    border: 1px solid var(--border);
+    font-family: ui-monospace, monospace;
+  }
+  .q-counter { font-size: 0.8rem; color: var(--muted); font-family: ui-monospace, monospace; }
+
+  .term {
+    font-size: 1.2rem;
+    font-weight: 500;
+    line-height: 1.45;
+    color: var(--text);
+    margin-bottom: 0.4rem;
+  }
+  .prompt { font-size: 0.8rem; color: var(--muted); margin-bottom: 1.25rem; line-height: 1.45; }
+
+  .options { display: flex; flex-direction: column; gap: 0.5rem; }
+  .opt {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.65rem;
+    background: rgba(9 9 11 / 0.5);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 0.7rem 1rem;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    text-align: left;
+    font-size: 0.9rem;
+    color: var(--text);
+    width: 100%;
+  }
+  .opt:hover:not(:disabled) {
+    border-color: rgba(249 115 22 / 0.45);
+    background: var(--accent-dim);
+  }
+  .opt .key {
+    min-width: 1.65rem;
+    height: 1.65rem;
+    border-radius: 0.35rem;
+    background: var(--surface2);
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    font-weight: 700;
+    font-family: ui-monospace, monospace;
+    flex-shrink: 0;
+  }
+  .opt.correct {
+    border-color: rgba(34 197 94 / 0.5);
+    background: var(--correct-bg);
+  }
+  .opt.correct .key { background: var(--correct); color: #fff; }
+  .opt.wrong {
+    border-color: rgba(239 68 68 / 0.5);
+    background: var(--wrong-bg);
+  }
+  .opt.wrong .key { background: var(--wrong); color: #fff; }
+  .opt.dim { opacity: 0.38; }
+  .opt:disabled { cursor: default; }
+
+  .feedback {
+    margin-top: 1.1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 0.65rem;
+    font-size: 0.85rem;
+    line-height: 1.5;
+    display: none;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct-fb { background: var(--correct-bg); border: 1px solid rgba(34 197 94 / 0.35); color: rgb(187 247 208); }
+  .feedback.wrong-fb { background: var(--wrong-bg); border: 1px solid rgba(239 68 68 / 0.35); color: rgb(254 202 202); }
+  .feedback .def { margin-top: 0.45rem; font-size: 0.78rem; color: var(--muted); }
+
+  .next-btn {
+    margin-top: 1.1rem;
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: 0.65rem;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.9rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    display: none;
+    transition: filter 0.15s;
+  }
+  .next-btn:hover { filter: brightness(1.08); }
+  .next-btn.show { display: block; }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.65rem;
+    margin-bottom: 1.25rem;
+  }
+  .stat {
+    background: rgba(24 24 27 / 0.6);
+    border-radius: 0.65rem;
+    padding: 0.85rem;
+    text-align: center;
+    border: 1px solid var(--border);
+  }
+  .stat .n { font-size: 1.65rem; font-weight: 700; color: var(--accent); font-family: ui-monospace, monospace; }
+  .stat .l { font-size: 0.7rem; color: var(--muted); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.06em; }
+  .restart-btn {
+    width: 100%;
+    padding: 0.8rem;
+    border-radius: 0.65rem;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.95rem;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+  }
+  .restart-btn:hover { filter: brightness(1.08); }
+  .ghost-btn {
+    width: 100%;
+    padding: 0.8rem;
+    margin-top: 0.5rem;
+    border-radius: 0.65rem;
+    background: transparent;
+    color: var(--muted);
+    font-size: 0.9rem;
+    font-weight: 500;
+    border: 1px solid var(--border);
+    cursor: pointer;
+  }
+  .ghost-btn:hover { color: var(--text); border-color: var(--muted); }
+
+  #file-section {
+    width: 100%;
+    max-width: 40rem;
+    text-align: center;
+    padding: 2.5rem 1.5rem;
+    background: var(--surface);
+    border: 2px dashed var(--border);
+    border-radius: 1rem;
+    margin-bottom: 1.25rem;
+  }
+  #file-section p { color: var(--muted); margin-bottom: 0.75rem; font-size: 0.88rem; line-height: 1.5; }
+  #file-section code { font-family: ui-monospace, monospace; font-size: 0.8rem; color: var(--accent); }
+  #file-input { display: none; }
+  .file-btn {
+    display: inline-block;
+    padding: 0.55rem 1.25rem;
+    background: var(--accent);
+    color: #fff;
+    border-radius: 0.5rem;
+    cursor: pointer;
+    font-size: 0.88rem;
+    font-weight: 600;
+    border: none;
+    transition: filter 0.15s;
+  }
+  .file-btn:hover { filter: brightness(1.08); }
+  .drop-hint { font-size: 0.72rem; color: var(--muted); margin-top: 0.65rem; }
+  #drag-overlay {
+    position: fixed; inset: 0;
+    background: rgba(249 115 22 / 0.1);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    color: var(--accent);
+    pointer-events: none;
+    z-index: 50;
+    font-weight: 600;
+  }
+  #drag-overlay.active { display: flex; }
+</style>
+</head>
+<body>
+
+<h1><span class="display">Cottage Study</span> · offline quiz</h1>
+<p class="subtitle" id="deck-subtitle">Load a Cottage Study JSON export (<code>cottage-study/v1</code> or <code>/v2</code>). Works fully offline once this page is saved.</p>
+
+<div id="drag-overlay">Drop JSON file here</div>
+
+<div id="file-section">
+  <p>Drop a <code>.json</code> export here, or choose a file.</p>
+  <label class="file-btn" for="file-input">Choose file</label>
+  <input type="file" id="file-input" accept=".json,application/json">
+  <p class="drop-hint">No network required after download.</p>
+</div>
+
+<div class="progress-wrap" id="progress-wrap" style="display:none">
+  <div class="progress-bar" id="progress-bar"></div>
+</div>
+
+<div class="card" id="quiz-card" style="display:none">
+  <div class="q-meta">
+    <span class="q-type-badge" id="q-type-badge">Multiple choice</span>
+    <span class="q-counter" id="q-counter"></span>
+  </div>
+  <div class="term" id="q-term"></div>
+  <div class="prompt" id="q-prompt"></div>
+  <div class="options" id="options"></div>
+  <div class="feedback" id="feedback"></div>
+  <button type="button" class="next-btn" id="next-btn">Next</button>
+</div>
+
+<div class="card" id="results-card" style="display:none">
+  <div style="text-align:center; margin-bottom:1.25rem;">
+    <div style="font-size:1.35rem; font-weight:600; color:var(--text)">Quiz complete</div>
+    <div style="color:var(--muted); font-size:0.82rem; margin-top:0.35rem" id="results-subtitle"></div>
+  </div>
+  <div class="stats-grid">
+    <div class="stat"><div class="n" id="r-correct">0</div><div class="l">Correct</div></div>
+    <div class="stat"><div class="n" id="r-wrong">0</div><div class="l">Wrong</div></div>
+    <div class="stat"><div class="n" id="r-pct">0%</div><div class="l">Score</div></div>
+  </div>
+  <button type="button" class="restart-btn" id="restart-btn">Restart</button>
+  <button type="button" class="ghost-btn" id="new-deck-btn">Load another file</button>
+</div>
+
+<script>
+(function () {
+  /** Keep in sync with `src/lib/notecardLimits.ts` (MAX_CARD_*). */
+  var MAX_DEF = 4096;
+  var MAX_TERM = 128;
+
+  function shuffle(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = Math.floor(Math.random() * (i + 1));
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function normalize(s) {
+    return String(s).trim().toLowerCase().replace(/\s+/g, ' ');
+  }
+
+  function normalizeDistractorList(raw, exclude, maxItems, maxChars) {
+    var ex = normalize(exclude);
+    var out = [];
+    var seen = {};
+    for (var i = 0; i < raw.length; i++) {
+      var x = raw[i];
+      if (typeof x !== 'string') continue;
+      var t = x.trim();
+      if (!t) continue;
+      if (t.length > maxChars) t = t.slice(0, maxChars);
+      var key = normalize(t);
+      if (key === ex || seen[key]) continue;
+      seen[key] = true;
+      out.push(t);
+      if (out.length >= maxItems) break;
+    }
+    return out;
+  }
+
+  function parseCard(obj) {
+    var term = String(obj.term != null ? obj.term : '').trim().slice(0, MAX_TERM);
+    var definition = String(obj.definition != null ? obj.definition : '')
+      .trim()
+      .slice(0, MAX_DEF);
+    var row = { term: term, definition: definition, mc_distractors: null };
+    if (!term || !definition) return null;
+    var hasV2 = Array.isArray(obj.incorrect_definitions) || Array.isArray(obj.incorrect_terms);
+    if (hasV2) {
+      var incorrect_definitions = normalizeDistractorList(obj.incorrect_definitions || [], definition, 3, MAX_DEF);
+      var incorrect_terms = normalizeDistractorList(obj.incorrect_terms || [], term, 3, MAX_TERM);
+      if (incorrect_definitions.length || incorrect_terms.length) {
+        row.mc_distractors = { incorrect_definitions: incorrect_definitions, incorrect_terms: incorrect_terms };
+      }
+    }
+    return row;
+  }
+
+  function buildMcChoices(card, allCards, askDefinition) {
+    var correctAnswer = askDefinition ? card.definition : card.term;
+    var stored = card.mc_distractors
+      ? (askDefinition ? card.mc_distractors.incorrect_definitions : card.mc_distractors.incorrect_terms)
+      : [];
+    var wrong = [];
+    var seenWrong = {};
+    function pushWrong(s) {
+      var t = String(s).trim();
+      if (!t) return;
+      if (normalize(t) === normalize(correctAnswer)) return;
+      var k = normalize(t);
+      if (seenWrong[k]) return;
+      seenWrong[k] = true;
+      wrong.push(t);
+    }
+    var sh = shuffle(stored.slice());
+    for (var si = 0; si < sh.length; si++) {
+      pushWrong(sh[si]);
+      if (wrong.length >= 3) break;
+    }
+    var others = allCards.filter(function (c) {
+      return c.term !== card.term || c.definition !== card.definition;
+    });
+    var distractorPool = shuffle(others.map(function (c) {
+      return askDefinition ? c.definition : c.term;
+    }).filter(function (t, i, arr) {
+      return arr.indexOf(t) === i && normalize(t) !== normalize(correctAnswer);
+    }));
+    for (var pi = 0; pi < distractorPool.length && wrong.length < 3; pi++) {
+      pushWrong(distractorPool[pi]);
+    }
+    return shuffle([correctAnswer].concat(wrong.slice(0, 3)));
+  }
+
+  var cards = [];
+  var queue = [];
+  var current = null;
+  var correctCount = 0;
+  var wrongCount = 0;
+  var answered = false;
+
+  function showFileSection() {
+    document.getElementById('file-section').style.display = '';
+    document.getElementById('progress-wrap').style.display = 'none';
+    document.getElementById('quiz-card').style.display = 'none';
+    document.getElementById('results-card').style.display = 'none';
+    document.querySelector('h1').innerHTML = '<span class="display">Cottage Study</span> · offline quiz';
+    document.getElementById('deck-subtitle').textContent = 'Load a Cottage Study JSON export (cottage-study/v1 or /v2). Works fully offline once this page is saved.';
+    document.title = 'Cottage Study — offline quiz';
+  }
+
+  function loadDeck(data) {
+    var fmt = data.format;
+    if (fmt && fmt !== 'cottage-study/v1' && fmt !== 'cottage-study/v2') {
+      alert('Unsupported format: ' + fmt + '. Use cottage-study/v1 or v2.');
+      return;
+    }
+    if (!data.cards || !Array.isArray(data.cards) || data.cards.length < 4) {
+      alert('Need at least 4 cards with term and definition.');
+      return;
+    }
+    cards = [];
+    for (var i = 0; i < data.cards.length; i++) {
+      var pc = parseCard(data.cards[i]);
+      if (pc) cards.push(pc);
+    }
+    if (cards.length < 4) {
+      alert('Need at least 4 valid cards.');
+      return;
+    }
+    var title = data.title ? String(data.title) : 'Quiz';
+    document.querySelector('h1').textContent = title;
+    document.getElementById('deck-subtitle').textContent = cards.length + ' cards · v' + (fmt === 'cottage-study/v2' ? '2' : '1');
+    document.title = title;
+    document.getElementById('file-section').style.display = 'none';
+    startQuiz();
+  }
+
+  function startQuiz() {
+    correctCount = 0;
+    wrongCount = 0;
+    queue = shuffle(cards);
+    document.getElementById('progress-wrap').style.display = 'block';
+    document.getElementById('results-card').style.display = 'none';
+    document.getElementById('quiz-card').style.display = 'block';
+    nextQuestion();
+  }
+
+  function makeQuestion(card, allCards) {
+    var isTF = Math.random() < 0.4;
+    var askDefinition = Math.random() < 0.5;
+    if (isTF) {
+      var isTrue = Math.random() < 0.5;
+      var decoyDef = card.definition;
+      if (!isTrue) {
+        var others = allCards.filter(function (c) { return c.term !== card.term; });
+        if (others.length) decoyDef = shuffle(others)[0].definition;
+      }
+      return {
+        type: 'tf',
+        term: card.term,
+        definition: card.definition,
+        displayDef: decoyDef,
+        answer: isTrue ? 0 : 1,
+        options: ['True', 'False']
+      };
+    }
+    var opts = buildMcChoices(card, allCards, askDefinition);
+    var correctAnswer = askDefinition ? card.definition : card.term;
+    var answerIndex = opts.indexOf(correctAnswer);
+    if (answerIndex < 0) answerIndex = 0;
+    return {
+      type: 'mc',
+      askDefinition: askDefinition,
+      term: card.term,
+      definition: card.definition,
+      answer: answerIndex,
+      options: opts
+    };
+  }
+
+  function nextQuestion() {
+    if (queue.length === 0) {
+      showResults();
+      return;
+    }
+    answered = false;
+    var card = queue.shift();
+    current = makeQuestion(card, cards);
+
+    var total = cards.length;
+    var done = total - queue.length - 1;
+    var pct = Math.round((done / total) * 100);
+    document.getElementById('progress-bar').style.width = pct + '%';
+    document.getElementById('q-counter').textContent = (done + 1) + ' / ' + total;
+    document.getElementById('q-type-badge').textContent = current.type === 'tf' ? 'True / false' : 'Multiple choice';
+
+    var qTermEl = document.getElementById('q-term');
+    var qPromptEl = document.getElementById('q-prompt');
+
+    if (current.type === 'tf') {
+      qPromptEl.textContent = 'Is the following definition correct for this term?';
+      qTermEl.textContent = current.term + ': "' + current.displayDef + '"';
+    } else {
+      qPromptEl.textContent = current.askDefinition
+        ? 'Choose the definition that matches this term.'
+        : 'Choose the term that matches this definition.';
+      qTermEl.textContent = current.askDefinition ? current.term : current.definition;
+    }
+
+    var optEl = document.getElementById('options');
+    optEl.innerHTML = '';
+    current.options.forEach(function (opt, i) {
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'opt';
+      btn.innerHTML = '<span class="key">' + (i + 1) + '</span><span>' + escapeHtml(opt) + '</span>';
+      btn.onclick = function () { selectAnswer(i); };
+      optEl.appendChild(btn);
+    });
+
+    var fb = document.getElementById('feedback');
+    fb.className = 'feedback';
+    fb.innerHTML = '';
+    document.getElementById('next-btn').className = 'next-btn';
+  }
+
+  function escapeHtml(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function selectAnswer(index) {
+    if (answered) return;
+    answered = true;
+    var opts = document.querySelectorAll('.opt');
+    for (var i = 0; i < opts.length; i++) opts[i].disabled = true;
+
+    var isCorrect = index === current.answer;
+    if (isCorrect) correctCount++; else wrongCount++;
+
+    for (var j = 0; j < opts.length; j++) {
+      var btn = opts[j];
+      var iCorrect = j === current.answer;
+      if (iCorrect) btn.classList.add('correct');
+      else if (j === index && !isCorrect) btn.classList.add('wrong');
+      else btn.classList.add('dim');
+    }
+
+    var fb = document.getElementById('feedback');
+    var reveal = current.type === 'mc'
+      ? (current.askDefinition ? current.definition : current.term)
+      : current.definition;
+    if (isCorrect) {
+      fb.className = 'feedback correct-fb show';
+      fb.innerHTML = '<strong>Correct.</strong><div class="def">' + escapeHtml(reveal) + '</div>';
+    } else {
+      fb.className = 'feedback wrong-fb show';
+      fb.innerHTML = '<strong>Incorrect.</strong><div class="def">Correct answer: ' + escapeHtml(reveal) + '</div>';
+    }
+    document.getElementById('next-btn').className = 'next-btn show';
+  }
+
+  function showResults() {
+    document.getElementById('quiz-card').style.display = 'none';
+    document.getElementById('progress-bar').style.width = '100%';
+    var total = correctCount + wrongCount;
+    var pct = total ? Math.round((correctCount / total) * 100) : 0;
+    document.getElementById('r-correct').textContent = correctCount;
+    document.getElementById('r-wrong').textContent = wrongCount;
+    document.getElementById('r-pct').textContent = pct + '%';
+    document.getElementById('results-subtitle').textContent = cards.length + ' cards · ' + (pct >= 80 ? 'Great work.' : pct >= 60 ? 'Keep studying.' : 'More practice helps.');
+    document.getElementById('results-card').style.display = 'block';
+  }
+
+  document.getElementById('next-btn').addEventListener('click', nextQuestion);
+  document.getElementById('restart-btn').addEventListener('click', startQuiz);
+  document.getElementById('new-deck-btn').addEventListener('click', showFileSection);
+
+  document.addEventListener('keydown', function (e) {
+    if (document.getElementById('quiz-card').style.display === 'none') return;
+    var num = parseInt(e.key, 10);
+    if (!isNaN(num) && num >= 1 && num <= current.options.length) {
+      if (!answered) selectAnswer(num - 1);
+    }
+    if ((e.key === 'Enter' || e.key === ' ') && answered) {
+      e.preventDefault();
+      nextQuestion();
+    }
+  });
+
+  function handleJSON(text) {
+    try {
+      var data = JSON.parse(text);
+      if (!data.cards || !Array.isArray(data.cards)) throw new Error('Missing cards array');
+      loadDeck(data);
+    } catch (err) {
+      alert('Could not parse JSON. Use a valid Cottage Study export.');
+    }
+  }
+
+  document.getElementById('file-input').addEventListener('change', function (e) {
+    var file = e.target.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (ev) { handleJSON(ev.target.result); };
+    reader.readAsText(file);
+    e.target.value = '';
+  });
+
+  var body = document.body;
+  body.addEventListener('dragover', function (e) { e.preventDefault(); document.getElementById('drag-overlay').classList.add('active'); });
+  body.addEventListener('dragleave', function (e) {
+    if (e.relatedTarget === null) document.getElementById('drag-overlay').classList.remove('active');
+  });
+  body.addEventListener('drop', function (e) {
+    e.preventDefault();
+    document.getElementById('drag-overlay').classList.remove('active');
+    var file = e.dataTransfer.files[0];
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (ev) { handleJSON(ev.target.result); };
+    reader.readAsText(file);
+  });
+})();
+</script>
+</body>
+</html>
