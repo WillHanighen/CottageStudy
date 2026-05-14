@@ -1,6 +1,13 @@
 <script lang="ts">
 	import Seo from '$lib/components/Seo.svelte';
-	import { buildMcChoices } from '$lib/mcDistractors';
+	import { buildMcChoices, isOtherCardThan } from '$lib/mcDistractors';
+	import {
+		advanceKindRunState,
+		createSeededRng,
+		generateUuidv7,
+		pickWeightedExcludingMaxStreak,
+		shuffleWithRng
+	} from '$lib/perceivedRandom';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -54,18 +61,22 @@
 	/** Relative frequency when mixing single-question types: 3 MC : 2 written : 1 T/F. */
 	const SINGLE_TYPE_WEIGHT: Record<SingleType, number> = { mc: 3, written: 2, tf: 1 };
 
-	function shuffle<T>(arr: T[]): T[] {
-		const a = arr.slice();
-		for (let i = a.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[a[i], a[j]] = [a[j], a[i]];
-		}
-		return a;
+	let sessionQuizRng: (() => number) | null = null;
+
+	function qr(): number {
+		return sessionQuizRng ? sessionQuizRng() : Math.random();
 	}
 
-	function uid(): string {
-		return Math.random().toString(36).slice(2, 10);
+	let quizUidCounter = 0;
+	function quizUid(): string {
+		quizUidCounter++;
+		return `${quizUidCounter}-${Math.floor(qr() * 1e9).toString(36)}`;
 	}
+
+	/** Constrain MC layouts across successive MC items while generating the quiz. */
+	let mcLayoutPrevSlotForQuiz: number | null = null;
+
+	let singleTypeStreak = { kind: null as SingleType | null, len: 0 };
 
 	function normalize(s: string): string {
 		return s.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -101,28 +112,31 @@
 		const promptText = askDefinition ? card.term : card.definition;
 		const correctAnswer = askDefinition ? card.definition : card.term;
 		if (type === 'mc') {
+			const choices = buildMcChoices(card, cards, askDefinition, qr, mcLayoutPrevSlotForQuiz);
+			const ix = choices.findIndex((c) => normalize(c) === normalize(correctAnswer));
+			mcLayoutPrevSlotForQuiz = ix >= 0 ? ix : mcLayoutPrevSlotForQuiz;
 			return {
-				id: uid(),
+				id: quizUid(),
 				type: 'mc',
 				cardId: card.id,
 				prompt: promptText,
 				correct: correctAnswer,
-				choices: buildMcChoices(card, cards, askDefinition)
+				choices
 			};
 		}
 		if (type === 'tf') {
-			const showCorrect = Math.random() < 0.5;
+			const showCorrect = qr() < 0.5;
 			let candidate = correctAnswer;
 			if (!showCorrect) {
 				const pool = cards
-					.filter((c) => c.id !== card.id)
+					.filter((c) => isOtherCardThan(card, c))
 					.map((c) => (askDefinition ? c.definition : c.term))
 					.filter((t) => normalize(t) !== normalize(correctAnswer));
-				if (pool.length > 0) candidate = pool[Math.floor(Math.random() * pool.length)];
+				if (pool.length > 0) candidate = pool[Math.floor(qr() * pool.length)];
 				else candidate = correctAnswer; // fallback if vocabulary exhausted
 			}
 			return {
-				id: uid(),
+				id: quizUid(),
 				type: 'tf',
 				cardId: card.id,
 				prompt: promptText,
@@ -131,7 +145,7 @@
 			};
 		}
 		return {
-			id: uid(),
+			id: quizUid(),
 			type: 'written',
 			cardId: card.id,
 			prompt: promptText,
@@ -141,7 +155,7 @@
 
 	function buildMatchingQuestion(group: Card[]): MatchingQuestion {
 		const labels = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'];
-		const shuffledForDefs = shuffle(group);
+		const shuffledForDefs = shuffleWithRng(group, qr);
 		const defs = shuffledForDefs.map((c, i) => ({
 			label: labels[i],
 			definition: askDefinition ? c.definition : c.term,
@@ -157,7 +171,7 @@
 			};
 		});
 		return {
-			id: uid(),
+			id: quizUid(),
 			type: 'matching',
 			pairs,
 			defs
@@ -173,20 +187,27 @@
 			// Defensive — caller guards against this. Default to written.
 			return 'written';
 		}
-		if (enabled.length === 1) return enabled[0];
-		let total = 0;
-		for (const t of enabled) total += SINGLE_TYPE_WEIGHT[t];
-		let r = Math.random() * total;
-		for (const t of enabled) {
-			r -= SINGLE_TYPE_WEIGHT[t];
-			if (r < 0) return t;
-		}
-		return enabled[enabled.length - 1];
+		const picked =
+			enabled.length === 1
+				? enabled[0]
+				: pickWeightedExcludingMaxStreak(
+						enabled,
+						SINGLE_TYPE_WEIGHT,
+						singleTypeStreak.kind,
+						singleTypeStreak.len,
+						qr
+					);
+		singleTypeStreak = advanceKindRunState(singleTypeStreak, picked);
+		return picked;
 	}
 
 	function generate() {
+		quizUidCounter = 0;
+		mcLayoutPrevSlotForQuiz = null;
+		singleTypeStreak = { kind: null, len: 0 };
+
 		const desired = Math.max(minCount, Math.min(maxCount, count));
-		const pool = shuffle(cards).slice(0, desired);
+		const pool = shuffleWithRng(cards, qr).slice(0, desired);
 		const list: Question[] = [];
 
 		// Single questions first (interleaved random types)
@@ -221,6 +242,7 @@
 
 	function startQuiz() {
 		if (!anyTypeEnabled) return;
+		sessionQuizRng = createSeededRng(generateUuidv7());
 		generate();
 		phase = 'taking';
 		// Scroll to top after the DOM swaps

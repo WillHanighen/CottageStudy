@@ -1,7 +1,14 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import Seo from '$lib/components/Seo.svelte';
-	import { buildMcChoices } from '$lib/mcDistractors';
+	import { buildMcChoices, isOtherCardThan } from '$lib/mcDistractors';
+	import {
+		advanceKindRunState,
+		createSeededRng,
+		generateUuidv7,
+		pickWeightedExcludingMaxStreak,
+		shuffleWithRng
+	} from '$lib/perceivedRandom';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -12,14 +19,14 @@
 	/** Relative frequency when mixing modes: 3 MC : 2 written : 1 T/F. */
 	const LEARN_KIND_WEIGHT: Record<LearnKind, number> = { mc: 3, written: 2, tf: 1 };
 
-	function shuffle<T>(arr: T[]): T[] {
-		const a = arr.slice();
-		for (let i = a.length - 1; i > 0; i--) {
-			const j = Math.floor(Math.random() * (i + 1));
-			[a[i], a[j]] = [a[j], a[i]];
-		}
-		return a;
+	let sessionRng: (() => number) | null = null;
+
+	function rngNow(): number {
+		return sessionRng ? sessionRng() : Math.random();
 	}
+
+	let kindRun = { kind: null as LearnKind | null, len: 0 };
+	let mcPrevCorrectSlot: number | null = null;
 
 	function normalize(s: string): string {
 		return s.trim().toLowerCase().replace(/\s+/g, ' ');
@@ -31,7 +38,7 @@
 	let phase = $state<'config' | 'practicing'>('config');
 	let configModalOpen = $state(false);
 
-	let queue = $state<Card[]>(shuffle(cards));
+	let queue = $state<Card[]>(shuffleWithRng(cards, rngNow));
 	let mastered = $state<Set<string>>(new Set());
 	let learnKind = $state<LearnKind>('written');
 	let currentChoices = $state<string[]>([]);
@@ -138,54 +145,58 @@
 	function pickLearnKind(): LearnKind {
 		const pool = learnKindPool;
 		if (pool.length === 0) return 'written';
-		if (pool.length === 1) return pool[0];
-		let total = 0;
-		for (const k of pool) total += LEARN_KIND_WEIGHT[k];
-		let r = Math.random() * total;
-		for (const k of pool) {
-			r -= LEARN_KIND_WEIGHT[k];
-			if (r < 0) return k;
-		}
-		return pool[pool.length - 1];
+		const picked = pickWeightedExcludingMaxStreak(
+			pool,
+			LEARN_KIND_WEIGHT,
+			kindRun.kind,
+			kindRun.len,
+			rngNow
+		);
+		kindRun = advanceKindRunState(kindRun, picked);
+		return picked;
 	}
 
 	function resetRun() {
 		mastered = new Set();
-		queue = shuffle(cards);
+		queue = shuffleWithRng(cards, rngNow);
 		totalAnswered = 0;
 		totalCorrect = 0;
 		result = null;
 		selected = null;
 		typed = '';
 		hintVisible = false;
+		mcPrevCorrectSlot = null;
+		kindRun = { kind: null, len: 0 };
 	}
 
-	function setupRound() {
-		if (!current) return;
+	function setupRound(card: Card) {
 		learnKind = pickLearnKind();
 		hintVisible = false;
 		selected = null;
 		typed = '';
 		result = null;
 
-		const correctAnswer = askDefinition ? current.definition : current.term;
+		const correctAnswer = askDefinition ? card.definition : card.term;
 
 		if (learnKind === 'mc') {
-			currentChoices = buildMcChoices(current, cards, askDefinition);
+			currentChoices = buildMcChoices(card, cards, askDefinition, rngNow, mcPrevCorrectSlot);
+			const corr = normalize(correctAnswer);
+			const ix = currentChoices.findIndex((c) => normalize(c) === corr);
+			mcPrevCorrectSlot = ix >= 0 ? ix : null;
 			tfCandidate = '';
 			return;
 		}
 
 		if (learnKind === 'tf') {
 			currentChoices = [];
-			const showCorrect = Math.random() < 0.5;
+			const showCorrect = rngNow() < 0.5;
 			let candidate = correctAnswer;
 			if (!showCorrect) {
 				const pool = cards
-					.filter((c) => c.id !== current.id)
+					.filter((c) => isOtherCardThan(card, c))
 					.map((c) => (askDefinition ? c.definition : c.term))
 					.filter((t) => normalize(t) !== normalize(correctAnswer));
-				if (pool.length > 0) candidate = pool[Math.floor(Math.random() * pool.length)];
+				if (pool.length > 0) candidate = pool[Math.floor(rngNow() * pool.length)];
 			}
 			tfCandidate = candidate;
 			tfCorrect = normalize(candidate) === normalize(correctAnswer) ? 'true' : 'false';
@@ -196,9 +207,14 @@
 		tfCandidate = '';
 	}
 
+	/** Re-run when the front card, phase, or session setup affecting prompts changes — mutations inside setupRound stay in untrack to avoid loops. */
 	$effect(() => {
 		if (phase !== 'practicing') return;
-		if (current) setupRound();
+		const card = current;
+		if (!card) return;
+		void askDefinition;
+		void learnKindPool;
+		untrack(() => setupRound(card));
 	});
 
 	function grade(isCorrect: boolean) {
@@ -249,6 +265,7 @@
 
 	function startLearn() {
 		if (!learnKindsConfigured) return;
+		sessionRng = createSeededRng(generateUuidv7());
 		resetRun();
 		phase = 'practicing';
 		setTimeout(() => window.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior }), 0);

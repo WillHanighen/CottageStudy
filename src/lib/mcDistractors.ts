@@ -3,6 +3,7 @@ import {
 	MAX_CARD_TERM_CHARS,
 	MAX_MC_DISTRACTORS_PER_SIDE
 } from '$lib/notecardLimits';
+import { repositionMcChoicesAvoidRepeatedSlot } from '$lib/perceivedRandom';
 
 /** Stored on each card (SQLite JSON + cottage-study/v2 export). */
 export type McDistractors = {
@@ -90,6 +91,15 @@ type CardLike = {
 	mc_distractors?: McDistractors | null;
 };
 
+/**
+ * True if `candidate` is a different notecard than `anchor` — same rule as distractor pooling:
+ * compare IDs when both exist, otherwise treat as same card only when term and definition match.
+ */
+export function isOtherCardThan(anchor: CardLike, candidate: CardLike): boolean {
+	if (anchor.id && candidate.id) return candidate.id !== anchor.id;
+	return !(candidate.term === anchor.term && candidate.definition === anchor.definition);
+}
+
 function shuffle<T>(arr: T[], rng: () => number): T[] {
 	const a = arr.slice();
 	for (let i = a.length - 1; i > 0; i--) {
@@ -106,7 +116,9 @@ export function buildMcChoices(
 	card: CardLike,
 	allCards: CardLike[],
 	askDefinition: boolean,
-	rng: () => number = Math.random
+	rng: () => number = Math.random,
+	/** Previous MC correct-answer slot (0–3); never repeat for consecutive MC prompts. Ignored when null/undefined. */
+	previousCorrectSlot?: number | null
 ): string[] {
 	const correctAnswer = askDefinition ? card.definition : card.term;
 	const normalize = normalizeEquality;
@@ -134,10 +146,7 @@ export function buildMcChoices(
 		if (wrong.length >= 3) break;
 	}
 
-	const others = allCards.filter((c) => {
-		if (card.id && c.id) return c.id !== card.id;
-		return !(c.term === card.term && c.definition === card.definition);
-	});
+	const others = allCards.filter((c) => isOtherCardThan(card, c));
 	const distractorPool = others
 		.map((c) => (askDefinition ? c.definition : c.term))
 		.filter((t, i, arr) => arr.indexOf(t) === i && normalize(t) !== normalize(correctAnswer));
@@ -147,5 +156,12 @@ export function buildMcChoices(
 		if (wrong.length >= 3) break;
 	}
 
-	return shuffle([correctAnswer, ...wrong.slice(0, 3)], rng);
+	const combined = shuffle([correctAnswer, ...wrong.slice(0, 3)], rng);
+	return repositionMcChoicesAvoidRepeatedSlot(
+		combined,
+		correctAnswer,
+		normalize,
+		previousCorrectSlot ?? null,
+		rng
+	);
 }
